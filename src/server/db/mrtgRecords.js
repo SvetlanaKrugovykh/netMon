@@ -48,6 +48,7 @@ module.exports.mrtgToDB = async function (data) {
     }
 
     for (const record of mrtgRecords) {
+      if (process.env.MRTG_DEBUG === '9') console.log('Inserting MRTG record:', record)
       const result = await pool.query(
         `
         INSERT INTO mrtg_data (timestamp, ip, dev_port, object_name, object_value_in, object_value_out)
