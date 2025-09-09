@@ -13,9 +13,12 @@ try {
 
 console.log('Testing loadSnmpMrtgObjectData with:', snmpMrtgObjectsList)
 
-try {
-  loadSnmpMrtgObjectData(snmpMrtgObjectsList)
-  console.log('loadSnmpMrtgObjectData executed (check logs for result)')
-} catch (err) {
-  console.error('Error during loadSnmpMrtgObjectData test:', err)
-}
+
+  (async () => {
+    try {
+      const result = await loadSnmpMrtgObjectData(snmpMrtgObjectsList)
+      console.log('Result from loadSnmpMrtgObjectData:', result)
+    } catch (err) {
+      console.error('Error during loadSnmpMrtgObjectData test:', err)
+    }
+  })()

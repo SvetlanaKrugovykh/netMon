@@ -23,8 +23,14 @@ const testSnmpObject = {
   status: 'alive', // or 'dead', depending on what you want to test
 }
 
+
 console.log('Testing checksnmpObjectStatus with:', testSnmpObject)
 
-checksnmpObjectStatus(testSnmpObject)
-  .then(() => console.log('checksnmpObjectStatus executed (check logs for result)'))
-  .catch(err => console.error('Error during checksnmpObjectStatus test:', err))
+  (async () => {
+    try {
+      const result = await checksnmpObjectStatus(testSnmpObject)
+      console.log('Result from checksnmpObjectStatus:', result)
+    } catch (err) {
+      console.error('Error during checksnmpObjectStatus test:', err)
+    }
+  })()
