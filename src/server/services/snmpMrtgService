@@ -16,7 +16,6 @@ async function loadSnmpMrtgObjectsList() {
 }
 
 async function loadSnmpMrtgObjectData(snmpMrtgObjectsList) {
-  if (process.env.PLATFORM !== 'freebsd') return true
 
   if (!Array.isArray(snmpMrtgObjectsList)) {
     console.log(`[${new Date().toISOString()}] snmpMrtgObjectsList is not an array or is undefined`)
