@@ -129,11 +129,25 @@ function snmpAnswersAnalizer(snmpObject, varbinds) {
 async function loadSnmpObjectsList() {
   try {
     const data = await sendReqToDB('__GetSnmpObjectsForWatching__', '', '')
-    const parsedData = JSON.parse(data)
-    const snmpObjectsList = parsedData.ResponseArray
-    return snmpObjectsList
+    if (!data) {
+      console.error('No data received from sendReqToDB')
+      return []
+    }
+    let parsedData
+    try {
+      parsedData = JSON.parse(data)
+    } catch (parseErr) {
+      console.error('Error parsing JSON:', parseErr, 'Raw data:', data)
+      return []
+    }
+    if (!parsedData.ResponseArray) {
+      console.error('ResponseArray is missing in parsedData:', parsedData)
+      return []
+    }
+    return parsedData.ResponseArray
   } catch (err) {
-    console.log(err)
+    console.error('Error in loadSnmpObjectsList:', err)
+    return []
   }
 }
 

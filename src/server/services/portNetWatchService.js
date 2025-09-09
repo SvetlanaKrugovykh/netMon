@@ -80,11 +80,25 @@ async function handleServiceAliveStatus(service) {
 async function loadServicesList() {
   try {
     const data = await sendReqToDB('__GetServicesForWatching__', '', '')
-    const parsedData = JSON.parse(data)
-    const servicesList = parsedData.ResponseArray
-    return servicesList
+    if (!data) {
+      console.error('No data received from sendReqToDB')
+      return []
+    }
+    let parsedData
+    try {
+      parsedData = JSON.parse(data)
+    } catch (parseErr) {
+      console.error('Error parsing JSON:', parseErr, 'Raw data:', data)
+      return []
+    }
+    if (!parsedData.ResponseArray) {
+      console.error('ResponseArray is missing in parsedData:', parsedData)
+      return []
+    }
+    return parsedData.ResponseArray
   } catch (err) {
     console.error('Error in loadServicesList:', err)
+    return []
   }
 }
 

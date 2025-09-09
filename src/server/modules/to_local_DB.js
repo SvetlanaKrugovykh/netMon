@@ -17,10 +17,11 @@ async function sendReqToDB(reqType, data, _text) {
         Authorization: `${AUTH_TOKEN}`,
         'Content-Type': 'application/json',
       },
+      timeout: 30000,
       data: {
         Query: `Execute;${reqType};${dataString};КОНЕЦ`,
       }
-    });
+    })
     if (!response.status == 200) {
       return null
     }
@@ -29,7 +30,7 @@ async function sendReqToDB(reqType, data, _text) {
       return response.data
     } else {
       let answer = response.data.toString()
-      return answer;
+      return answer
     }
 
   } catch (err) {

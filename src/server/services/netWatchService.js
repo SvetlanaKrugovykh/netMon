@@ -2,7 +2,6 @@ const { netWatchPingerProbe, netWatchPingerWithDelay, loadipList } = require('./
 const { checkServiceStatus, loadServicesList } = require('./portNetWatchService.js')
 const { checksnmpObjectStatus, loadSnmpObjectsList } = require('./snmpNetWatchService.js')
 const { loadSnmpMrtgObjectsList, loadSnmpMrtgObjectData } = require('./snmpMrtgService')
-const { checkLogsFile } = require('../services/logAnalyzeService')
 
 let ipCheckDelayList = []
 
@@ -85,20 +84,8 @@ async function mrtgWatchStarter() {
 }
 
 
-async function logAnaliseStarter() {
-
-  const ArpAttackPoolingInterval = parseInt(process.env.ARP_ATTACK_POOLING_INTERVAL) * 1000 * 60 || 600000
-
-  setInterval(() => {
-    checkLogsFile()
-  }, ArpAttackPoolingInterval)
-
-}
-
-
 module.exports = {
   netWatchStarter,
   mrtgWatchStarter,
-  logAnaliseStarter,
-  ipCheckDelayListContainer: { list: ipCheckDelayList },
+  ipCheckDelayListContainer: { list: ipCheckDelayList }
 }
