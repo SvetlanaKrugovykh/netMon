@@ -158,11 +158,13 @@ async function handleAliveStatus(ip_address) {
 async function loadipList() {
   try {
     const data = await sendReqToDB('__GetIpAddressesForWatching__', '', '')
+    if (!data) return []
     const parsedData = JSON.parse(data)
-    const ipList = parsedData.ResponseArray
-    return ipList
+    if (!parsedData.ResponseArray) return []
+    return parsedData.ResponseArray;
   } catch (err) {
     console.log(err)
+    return []
   }
 }
 
