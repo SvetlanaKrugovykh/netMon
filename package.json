@@ -15,7 +15,9 @@
 		"fastify": "^4.25.2",
 		"fastify-plugin": "^5.0.1",
 		"form-data": "^4.0.0",
+		"fs": "^0.0.1-security",
 		"http-errors": "^2.0.0",
+		"jsonwebtoken": "^9.0.2",
 		"pg": "^8.11.3",
 		"ping": "^0.4.4",
 		"snmp-native": "^1.2.0"

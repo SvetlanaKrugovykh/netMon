@@ -1,5 +1,6 @@
 const fp = require('fastify-plugin')
 require('dotenv').config()
+const authService = require('../services/authService')
 
 const allowedIPAddresses = process.env.API_ALLOWED_IPS.split(',')
 

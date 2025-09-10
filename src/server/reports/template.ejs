@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MRTG Report</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+
+    .chart {
+      margin-bottom: 40px;
+    }
+
+    h2 {
+      color: #333;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>MRTG Report (Last 24 Hours)</h1>
+  <% charts.forEach(chart=> { %>
+    <div class="chart">
+      <h2>IP: <%= chart.ip %>, Port: <%= chart.dev_port %>
+      </h2>
+      <img src="<%= chart.chartImage %>" alt="Traffic Chart">
+    </div>
+    <% }) %>
+</body>
+
+</html>
