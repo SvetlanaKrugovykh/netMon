@@ -23,7 +23,7 @@ async function runCommand(command, args = [], options = {}) {
         resolve({ stdout, stderr, exitCode: code })
       } else {
         console.error(`Command failed: ${command} ${args.join(' ')}\n${stderr.trim()}`)
-        reject(new Error(stderr.trim() || `Command failed with exit code ${code}`))
+        resolve({ stdout, stderr, exitCode: code })
       }
     })
 
