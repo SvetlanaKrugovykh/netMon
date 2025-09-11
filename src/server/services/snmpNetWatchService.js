@@ -87,6 +87,11 @@ async function snmpGet(snmpObject, community = 'public') {
       session.get({ oid: snmpObject.oid }, (error, varbinds) => {
         session.close()
         if (error) {
+          if (error.message && error.message.toLowerCase().includes('timeout')) {
+            console.error(`[ERROR] Timeout for SNMP get ${snmpObject.ip_address} ${snmpObject.oid}`)
+          } else {
+            console.error('Error:', error.message || error)
+          }
           reject(error)
         } else {
           resolve(varbinds)
@@ -99,7 +104,11 @@ async function snmpGet(snmpObject, community = 'public') {
       throw new Error('No response received')
     }
   } catch (error) {
-    console.error('Error:', error)
+    if (error.message && error.message.toLowerCase().includes('timeout')) {
+      console.error(`[ERROR] Timeout for SNMP get ${snmpObject.ip_address} ${snmpObject.oid}`)
+    } else {
+      console.error('Error:', error.message || error)
+    }
     throw error
   }
 }
