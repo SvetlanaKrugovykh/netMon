@@ -10,34 +10,53 @@ const Status = {
 const aliveIP = []
 const deadIP = []
 
+const { runCommand } = require('../utils/runCommand')
+
+function transformPingResult(stdout, ip_address, sourceIp) {
+  const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19)
+  let isAlive = stdout.includes('1 received')
+  if (isAlive) {
+    return `${formattedDate} Host at ${ip_address.ip_address} is alive (source IP: ${sourceIp})`
+  } else {
+    return `${formattedDate} Host at ${ip_address.ip_address} is not alive (source IP: ${sourceIp})`
+  }
+}
+
 function netWatchPingerProbe(ip_address) {
   try {
-    const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19)
     let failedAttempts = 0
+    const sourceIp = process.env.PING_SOURCE_IP || '91.220.106.2'
 
     const probeHost = function () {
       return new Promise((resolve, reject) => {
-        ping.sys.probe(ip_address.ip_address, function (isAlive) {
-          if (isAlive) {
-            handleAliveStatus(ip_address)
-            resolve()
-          } else {
-            console.log(`${formattedDate} Host at ${ip_address.ip_address} is not alive`)
-            failedAttempts++
-            if (failedAttempts >= 3) {
-              handleDeadStatus(ip_address)
+        const cmd = `ping -c 1 -I ${sourceIp} ${ip_address.ip_address}`
+        runCommand(cmd)
+          .then(stdout => {
+            let resultMsg = transformPingResult(stdout, ip_address, sourceIp)
+            console.log(resultMsg)
+            if (stdout.includes('1 received')) {
+              handleAliveStatus(ip_address)
               resolve()
             } else {
-              setTimeout(() => {
-                probeHost().then(resolve).catch(reject)
-              }, 5000)
+              failedAttempts++
+              if (failedAttempts >= 3) {
+                handleDeadStatus(ip_address)
+                resolve()
+              } else {
+                setTimeout(() => {
+                  probeHost().then(resolve).catch(reject)
+                }, 5000)
+              }
             }
-          }
-        })
+          })
+          .catch(err => {
+            console.error(err)
+            reject(err)
+          })
       })
     }
 
-    probeHost().catch((err) => {
+    probeHost().catch(err => {
       console.error(err)
     })
   } catch (err) {
