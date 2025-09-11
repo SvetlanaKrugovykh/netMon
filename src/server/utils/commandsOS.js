@@ -4,6 +4,10 @@ const exec = util.promisify(require('child_process').exec)
 async function runCommand(command, args = [], value = '') {
   let fullCommand = command
 
+  if (command === 'snmpwalk' && process.env.SNMP_SOURCE_IP) {
+    fullCommand += ` -S ${process.env.SNMP_SOURCE_IP}`
+  }
+
   if (args.length > 0) {
     fullCommand += ` ${args.join(' ')}`
   }
@@ -19,7 +23,6 @@ async function runCommand(command, args = [], value = '') {
       if (fullCommand.includes('1.3.6.1.2.1.31.1.1.1.6') || fullCommand.includes('1.3.6.1.2.1.31.1.1.1.10')) {
         return stdout.split(' ').pop().trim()
       }
-
       if (stdout.includes(value)) {
         return 'Status OK'
       } else {
