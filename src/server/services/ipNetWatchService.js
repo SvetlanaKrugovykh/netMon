@@ -29,12 +29,13 @@ function netWatchPingerProbe(ip_address) {
 
     const probeHost = function () {
       return new Promise((resolve, reject) => {
-        const cmd = `ping -c 1 -I ${sourceIp} ${ip_address.ip_address}`
-        runCommand(cmd)
-          .then(stdout => {
-            let resultMsg = transformPingResult(stdout, ip_address, sourceIp)
+        const command = 'ping'
+        const args = ['-c', '1', '-I', sourceIp, ip_address.ip_address]
+        runCommand(command, args)
+          .then(result => {
+            let resultMsg = transformPingResult(result.stdout, ip_address, sourceIp)
             console.log(resultMsg)
-            if (stdout.includes('1 received')) {
+            if (result.stdout.includes('1 received')) {
               handleAliveStatus(ip_address)
               resolve()
             } else {
@@ -69,7 +70,7 @@ async function netWatchPingerWithDelay(ipAddresses) {
     const failedAttempts = {}
     const lossThreshold = 0.2  // 20% packet loss threshold
     const pingCount = 50
-    const sourceIp = process.env.PING_SOURCE_IP || '127.0.0.1'
+    const sourceIp = process.env.PING_SOURCE_IP || '91.220.106.2'
 
     ipAddresses.forEach(ip => {
       failedAttempts[ip] = {
@@ -85,9 +86,11 @@ async function netWatchPingerWithDelay(ipAddresses) {
       let rttSum = 0
 
       for (let i = 0; i < pingCount; i++) {
-        const cmd = `ping -c 1 -I ${sourceIp} ${ip_address}`
+        const command = 'ping'
+        const args = ['-c', '1', '-I', sourceIp, ip_address]
         try {
-          const stdout = await runCommand(cmd)
+          const result = await runCommand(command, args)
+          const stdout = result.stdout
           const match = stdout.match(/time=([0-9.]+) ms/)
           if (stdout.includes('1 received')) {
             rttSum += match ? parseFloat(match[1]) : 0
@@ -117,11 +120,6 @@ async function netWatchPingerWithDelay(ipAddresses) {
   } catch (err) {
     console.log(err)
   }
-}
-
-function handlePacketLoss(ip_address, lossPercentage) {
-  console.log(`Warning: High packet loss (${Math.round(lossPercentage * 100)}%) detected at ${ip_address}.`)
-  sendTelegramMessage(`Warning: High packet loss (${Math.round(lossPercentage * 100)}%) detected at ${ip_address}.`)
 }
 
 function handleNormalDelay(ip_address, avgRTT) {
