@@ -87,7 +87,11 @@ async function handleStatusChange(args) {
 //#region  send message to telegram
 async function sendTelegramMessage(message) {
   const apiUrl = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`
-
+  const now = Date.now()
+  const waitTime = lastTelegramSendTime + TELEGRAM_SEND_DELAY - now
+  if (waitTime > 0) {
+    await sleep(waitTime)
+  }
   try {
     let modifiedText = message.replace("alive", "✅")
     modifiedText = modifiedText.replace("dead", "❌")
@@ -95,6 +99,7 @@ async function sendTelegramMessage(message) {
     modifiedText = modifiedText.replace("Info", "ℹ️")
     await sendTelegramMessageToExceptionWoda(message)
     const response = await sendToChat(apiUrl, telegramBotToken, telegramChatId, modifiedText)
+    lastTelegramSendTime = Date.now()
     if (!response) {
       console.log('Error sending Telegram message.')
     }
