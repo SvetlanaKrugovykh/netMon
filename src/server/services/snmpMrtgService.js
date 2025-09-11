@@ -31,8 +31,8 @@ async function loadSnmpMrtgObjectData(snmpMrtgObjectsList) {
       try {
         const oid = `${snmpObject.oid}.${snmpObject.port}`
         const cmdArgs = ['-v', '2c', '-c', 'public', '-OXsq', '-On', snmpObject.ip_address, oid]
-        response = await runCommand('snmpwalk', cmdArgs)
-        response = response.replace(/\s+/g, ' ').trim()
+  response = await runCommand('snmpwalk', cmdArgs)
+  response = (typeof response === 'string') ? response.replace(/\s+/g, ' ').trim() : ''
         const match = response.match(/^(\d+)$/)
         if (!match) {
           console.log(`Invalid SNMP value received: ${response} (OID: ${snmpObject.oid})`)
@@ -49,7 +49,11 @@ async function loadSnmpMrtgObjectData(snmpMrtgObjectsList) {
         }
         data.push(snmpData)
       } catch (err) {
-        console.log(`Error executing SNMP command for ${snmpObject.ip_address}:${snmpObject.oid}`, err)
+        if (err && typeof err.message === 'string' && err.message.toLowerCase().includes('timeout')) {
+          console.log(`Timeout for ${snmpObject.ip_address}:${snmpObject.oid}`)
+        } else {
+          console.log(`Error executing SNMP command for ${snmpObject.ip_address}:${snmpObject.oid}: ${err && err.message ? err.message : err}`)
+        }
       }
     }
     await mrtgToDB(data)

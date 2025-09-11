@@ -1,7 +1,7 @@
 const { netWatchPingerProbe, netWatchPingerWithDelay, loadipList } = require('./ipNetWatchService.js')
 const { checkServiceStatus, loadServicesList } = require('./portNetWatchService.js')
 const { checksnmpObjectStatus, loadSnmpObjectsList } = require('./snmpNetWatchService.js')
-const { loadSnmpMrtgObjectsList, loadSnmpMrtgObjectData } = require('./snmpMrtgService')
+const { loadSnmpMrtgObjectsList, loadSnmpMrtgObjectData } = require('./snmpMrtgService.js')
 
 let ipCheckDelayList = []
 

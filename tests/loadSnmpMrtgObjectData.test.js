@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { loadSnmpMrtgObjectData } = require('../src/server/services/snmpMrtgService');
+const { loadSnmpMrtgObjectData } = require('../src/server/services/snmpMrtgService.js');
 
 const TEST_SNMP_MRTG_OBJECTS = process.env.TEST_SNMP_MRTG_OBJECTS;
 
