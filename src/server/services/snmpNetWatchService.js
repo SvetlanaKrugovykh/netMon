@@ -20,7 +20,7 @@ async function checksnmpObjectStatus(snmpObject) {
     } else {
       response = await runCommand('snmpwalk', ['-v', '2c', '-c', 'public', '-OXsq', '-On', snmpObject.ip_address, snmpObject.oid], snmpObject.value)
     }
-    if (snmpObject && snmpObject.status && typeof snmpObject.status === 'string' && snmpObject.status.includes('OK')) {
+    if (response && typeof response === 'string' && response.includes('Status OK')) {
       handleSnmpObjectAliveStatus(snmpObject, response)
     } else {
       console.log(`${formattedDate} ip:${snmpObject.ip_address} ${snmpObject.description} response: ${response} oid:${snmpObject.oid}`)
