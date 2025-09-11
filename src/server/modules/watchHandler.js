@@ -123,14 +123,11 @@ async function sendTelegramMessageToExceptionWoda(message) {
     modifiedText = modifiedText.replace("dead", "❌")
     const response = await sendToChat(apiUrl, telegramBotTokenSilver, EXCEPTION_ID_WODA, modifiedText)
     if (!response) {
-      let modifiedText = message.replace("alive", "✅")
-      modifiedText = modifiedText.replace("dead", "❌")
-      modifiedText = modifiedText.replace("Warning", "⚠️")
-      modifiedText = modifiedText.replace("Info", "ℹ️")
-      await sendTelegramMessageToExceptionWoda(message)
-      const response = await sendToChat(apiUrl, telegramBotToken, telegramChatId, modifiedText)
-      lastTelegramSendTime = Date.now()
-      if (!response) {
-        console.log('Error sending Telegram message.')
-      }
+      console.log('Error sending Telegram message.')
+    }
+  } catch (error) {
+    console.error('Error sending Telegram message:', error)
+  }
+}
+
 module.exports = { handleStatusChange, sendTelegramMessage }
