@@ -19,7 +19,6 @@
 		"http-errors": "^2.0.0",
 		"jsonwebtoken": "^9.0.2",
 		"pg": "^8.11.3",
-		"ping": "^0.4.4",
 		"snmp-native": "^1.2.0"
 	},
 	"devDependencies": {
