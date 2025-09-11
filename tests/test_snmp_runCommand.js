@@ -1,5 +1,5 @@
 require('dotenv').config()
-const { runCommand } = require('./src/server/utils/commandsOS')
+const { runCommand } = require('../src/server/utils/commandsOS')
 
 const testIp = process.env.TEST_SNMP_IP
 const args = [
