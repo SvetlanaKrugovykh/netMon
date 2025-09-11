@@ -5,7 +5,7 @@ async function runCommand(command, args = [], value = '') {
   let fullCommand = command
 
   if (command === 'snmpwalk' && process.env.SNMP_SOURCE_IP) {
-    fullCommand += ` -S ${process.env.SNMP_SOURCE_IP}`
+    fullCommand += ` -s ${process.env.SNMP_SOURCE_IP}`
   }
 
   if (args.length > 0) {
