@@ -22,7 +22,11 @@ async function runCommand(command, args = [], options = {}) {
       if (code === 0) {
         resolve({ stdout, stderr, exitCode: code })
       } else {
-        console.error(`Command failed: ${command} ${args.join(' ')}\n${stderr.trim()}`)
+        if (stderr && stderr.toLowerCase().includes('timeout')) {
+          console.error(`[ERROR] Timeout for ${command} ${args.join(' ')} | CMD: ${command} ${args.join(' ')}`)
+        } else {
+          console.error(`Command failed: ${command} ${args.join(' ')}`)
+        }
         resolve({ stdout, stderr, exitCode: code })
       }
     })
