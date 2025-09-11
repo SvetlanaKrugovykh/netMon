@@ -1,4 +1,4 @@
-const ping = require('ping')
+require('dotenv').config()
 const { sendReqToDB } = require('../modules/to_local_DB.js')
 const { handleStatusChange, sendTelegramMessage } = require('../modules/watchHandler.js')
 
@@ -68,6 +68,8 @@ async function netWatchPingerWithDelay(ipAddresses) {
   try {
     const failedAttempts = {}
     const lossThreshold = 0.2  // 20% packet loss threshold
+    const pingCount = 50
+    const sourceIp = process.env.PING_SOURCE_IP || '127.0.0.1'
 
     ipAddresses.forEach(ip => {
       failedAttempts[ip] = {
@@ -77,53 +79,45 @@ async function netWatchPingerWithDelay(ipAddresses) {
       }
     })
 
-    const probeHostWithDelay = function (ip_address) {
-      return new Promise((resolve, reject) => {
-        const pingCount = 50
+    const probeHostWithDelay = async function (ip_address) {
+      let completedPings = 0
+      let lostPings = 0
+      let rttSum = 0
 
-        let completedPings = 0
-        let lostPings = 0
-        let rttSum = 0
-
-        const handlePingResult = (isAlive, time) => {
-          completedPings++
-          if (isAlive) {
-            rttSum += time
+      for (let i = 0; i < pingCount; i++) {
+        const cmd = `ping -c 1 -I ${sourceIp} ${ip_address}`
+        try {
+          const stdout = await runCommand(cmd)
+          const match = stdout.match(/time=([0-9.]+) ms/)
+          if (stdout.includes('1 received')) {
+            rttSum += match ? parseFloat(match[1]) : 0
           } else {
             lostPings++
           }
-
-          if (completedPings === pingCount) {
-            failedAttempts[ip_address].totalPings = completedPings
-            failedAttempts[ip_address].lostPings = lostPings
-            failedAttempts[ip_address].rttSum = rttSum
-
-            const lossPercentage = lostPings / pingCount
-            if (lossPercentage > lossThreshold) {
-              handlePacketLoss(ip_address, lossPercentage)
-            } else {
-              handleNormalDelay(ip_address, rttSum / completedPings)
-            }
-            resolve()
-          }
+        } catch (err) {
+          lostPings++
         }
+        completedPings++
+      }
 
-        for (let i = 0; i < pingCount; i++) {
-          ping.sys.probe(ip_address, function (isAlive, time) {
-            handlePingResult(isAlive, time)
-          })
-        }
-      })
+      failedAttempts[ip_address].totalPings = completedPings
+      failedAttempts[ip_address].lostPings = lostPings
+      failedAttempts[ip_address].rttSum = rttSum
+
+      const lossPercentage = lostPings / pingCount
+      if (lossPercentage > lossThreshold) {
+        handlePacketLoss(ip_address, lossPercentage)
+      } else {
+        handleNormalDelay(ip_address, rttSum / (completedPings - lostPings))
+      }
     }
 
     const promises = ipAddresses.map(ip => probeHostWithDelay(ip))
-
     await Promise.all(promises)
   } catch (err) {
     console.log(err)
   }
 }
-
 
 function handlePacketLoss(ip_address, lossPercentage) {
   console.log(`Warning: High packet loss (${Math.round(lossPercentage * 100)}%) detected at ${ip_address}.`)
