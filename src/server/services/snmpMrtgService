@@ -1,0 +1,75 @@
+const { runCommand } = require('../utils/commandsOS')
+const { sendReqToDB } = require('../modules/to_local_DB')
+const { mrtgToDB } = require('../db/mrtgRecords')
+require('dotenv').config()
+
+async function loadSnmpMrtgObjectsList() {
+  try {
+    const data = await sendReqToDB('__GetSnmpMrtgObjects__', '', '')
+    const parsedData = JSON.parse(data)
+    const snmpObjectsList = parsedData.ResponseArray
+    return snmpObjectsList
+  } catch (err) {
+    if (err && err.message && err.message.toLowerCase().includes('timeout')) {
+      console.error('[ERROR] Timeout in loadSnmpMrtgObjectsList')
+    } else {
+      console.error('[ERROR] SNMP:', err.message || err)
+    }
+    return []
+  }
+}
+
+async function loadSnmpMrtgObjectData(snmpMrtgObjectsList) {
+
+  if (!Array.isArray(snmpMrtgObjectsList)) {
+    console.log(`[${new Date().toISOString()}] snmpMrtgObjectsList is not an array or is undefined`)
+    return
+  }
+
+  let response = ''
+  const data = []
+
+  try {
+    for (let snmpObject of snmpMrtgObjectsList) {
+      const unixTimestamp = Math.floor(Date.now() / 1000)
+      try {
+        const oid = `${snmpObject.oid}.${snmpObject.port}`
+        const cmdArgs = ['-v', '2c', '-c', 'public', '-OXsq', '-On', snmpObject.ip_address, oid]
+        response = await runCommand('snmpwalk', cmdArgs)
+        response = (typeof response === 'string') ? response.replace(/\s+/g, ' ').trim() : ''
+        const match = response.match(/^(\d+)$/)
+        if (!match) {
+          console.log(`Invalid SNMP value received: ${response} (OID: ${snmpObject.oid})`)
+          continue
+        }
+        const snmpValue = match[1]
+
+        const snmpData = {
+          ip_address: snmpObject.ip_address,
+          oid: snmpObject.oid,
+          value: snmpValue,
+          port: snmpObject.port,
+          unixTimestamp: unixTimestamp
+        }
+        data.push(snmpData)
+      } catch (err) {
+        if (err && err.message && err.message.toLowerCase().includes('timeout')) {
+          console.error(`[ERROR] Timeout for SNMP ${snmpObject.ip_address}:${snmpObject.oid}`)
+        } else {
+          console.error(`[ERROR] SNMP ${snmpObject.ip_address}:${snmpObject.oid}:`, err.message || err)
+        }
+      }
+    }
+    await mrtgToDB(data)
+  } catch (err) {
+    if (err && err.message && err.message.toLowerCase().includes('timeout')) {
+      console.error('[ERROR] Timeout in loadSnmpMrtgObjectData')
+    } else {
+      console.error('[ERROR] SNMP:', err.message || err)
+    }
+  }
+}
+
+
+
+module.exports = { loadSnmpMrtgObjectsList, loadSnmpMrtgObjectData }
