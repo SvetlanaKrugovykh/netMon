@@ -14,7 +14,9 @@ async function runCommand(command, args = [], value = '') {
     if (command.includes('pfctl')) {
       console.log(`${new Date()}: ${command} out: ${stdout}`)
     }
-    if (stderr) {
+    if (stderr && stderr.toLowerCase().includes('timeout')) {
+      console.error(`[ERROR] Timeout for ${command}`)
+    } else if (stderr) {
       console.error(`[ERROR] ${command}: ${stderr.split('\n')[0]}`)
     }
     if (fullCommand.includes('1.3.6.1.2.1.31.1.1.1.6') || fullCommand.includes('1.3.6.1.2.1.31.1.1.1.10')) {
@@ -27,7 +29,11 @@ async function runCommand(command, args = [], value = '') {
     }
     return { stdout, stderr }
   } catch (error) {
-    console.error(`[ERROR] ${command}: ${error.message}`)
+    if (error && error.message && error.message.toLowerCase().includes('timeout')) {
+      console.error(`[ERROR] Timeout for ${command}`)
+    } else {
+      console.error(`[ERROR] ${command}: ${error.message}`)
+    }
     return null
   }
 }
