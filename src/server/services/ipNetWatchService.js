@@ -34,7 +34,6 @@ function netWatchPingerProbe(ip_address) {
         runCommand(command, args)
           .then(result => {
             let resultMsg = transformPingResult(result.stdout, ip_address, sourceIp)
-            console.log(resultMsg)
             if (result.stdout.includes('1 received')) {
               handleAliveStatus(ip_address)
               resolve()

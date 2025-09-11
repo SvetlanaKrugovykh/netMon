@@ -65,13 +65,15 @@ async function mrtgWatchStarter() {
   let snmpMrtgObjectsList = await loadSnmpMrtgObjectsList()
   const snmpMrtgPollingInterval = parseInt(process.env.SNMP_MRTG_POOLING_INTERVAL) * 1000 || 600000
 
-  setInterval(() => {
-    try {
-      loadSnmpMrtgObjectData(snmpMrtgObjectsList)
-    } catch (err) {
-      console.log(err)
-    }
-  }, snmpMrtgPollingInterval)
+  if (process.env.SNMP_POOLING_ENABLE === 'true') {
+    setInterval(() => {
+      try {
+        loadSnmpMrtgObjectData(snmpMrtgObjectsList)
+      } catch (err) {
+        console.log(err)
+      }
+    }, snmpMrtgPollingInterval)
+  }
 }
 
 
