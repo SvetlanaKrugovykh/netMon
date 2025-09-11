@@ -1,8 +1,15 @@
 //#region  status handlers
 const { sendReqToDB, sendToChat } = require('./to_local_DB.js')
 
-const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN
-const telegramChatId = process.env.TELEGRAM_CHAT_ID
+let telegramBotToken = process.env.TELEGRAM_BOT_TOKEN
+let telegramChatId = process.env.TELEGRAM_CHAT_ID
+
+let lastTelegramSendTime = 0
+const TELEGRAM_SEND_DELAY = 5000 // ms
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
 
 async function handleStatusChange(args) {
   const {
@@ -116,13 +123,14 @@ async function sendTelegramMessageToExceptionWoda(message) {
     modifiedText = modifiedText.replace("dead", "❌")
     const response = await sendToChat(apiUrl, telegramBotTokenSilver, EXCEPTION_ID_WODA, modifiedText)
     if (!response) {
-      console.log('Error sending Telegram message.')
-    }
-  } catch (error) {
-    console.error('Error sending Telegram message:', error)
-  }
-}
-
-//#endregion
-
+      let modifiedText = message.replace("alive", "✅")
+      modifiedText = modifiedText.replace("dead", "❌")
+      modifiedText = modifiedText.replace("Warning", "⚠️")
+      modifiedText = modifiedText.replace("Info", "ℹ️")
+      await sendTelegramMessageToExceptionWoda(message)
+      const response = await sendToChat(apiUrl, telegramBotToken, telegramChatId, modifiedText)
+      lastTelegramSendTime = Date.now()
+      if (!response) {
+        console.log('Error sending Telegram message.')
+      }
 module.exports = { handleStatusChange, sendTelegramMessage }
