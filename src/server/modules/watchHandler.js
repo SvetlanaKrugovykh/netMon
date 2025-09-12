@@ -104,7 +104,7 @@ async function sendTelegramMessage(message) {
       console.log('Error sending Telegram message.')
     }
   } catch (error) {
-    console.error('Error sending Telegram message:', error)
+    console.error('Error sending Telegram message:', error?.message || error)
   }
 }
 
