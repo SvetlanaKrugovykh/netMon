@@ -12,7 +12,7 @@ async function test() {
   //   testIp,
   //   '1.3.6.1.2.1.1.1.0'
   // ]
-  const value = 'Status OK'
+  const value = '???'
   console.log('Test 1: SNMPwalk with value')
   const result1 = await runCommand(command, args, value)
   console.log('Result:', result1)
