@@ -3,16 +3,15 @@ require('dotenv').config()
 
 async function test() {
   const testIp = process.env.TEST_SNMP_IP
-  const command = 'snmpwalk -v 2c -c public -OXsq -On ' + testIp + ' 1.3.6.1.2.1.1.1.0'
+  const command = 'snmpwalk'
 
-  const args = []
-  // [
-  //   '-v', '2c',
-  //   '-c', 'public',
-  //   '-OXsq', '-On',
-  //   testIp,
-  //   '1.3.6.1.2.1.1.1.0'
-  // ]
+  const args = [
+    '-v', '2c',
+    '-c', 'public',
+    '-OXsq', '-On',
+    testIp,
+    '1.3.6.1.2.1.1.1.0'
+  ]
   const value = '???'
   console.log('Test 1: SNMPwalk with value')
   const result1 = await runCommand(command, args, value)
