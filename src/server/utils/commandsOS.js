@@ -15,14 +15,15 @@ const exec = util.promisify(require('child_process').exec)
 
 async function runCommand(command, args = [], value = '') {
   let fullCommand = command
-  if (command === 'snmpwalk' && process.env.SNMP_SOURCE_IP) {
-    fullCommand += ` -s ${process.env.SNMP_SOURCE_IP}`
-  }
+
+  // if (command === 'snmpwalk' && process.env.SNMP_SOURCE_IP) {
+  //   fullCommand += ` -s ${process.env.SNMP_SOURCE_IP}`
+  // }
+
   if (args.length > 0) {
     fullCommand += ` ${args.join(' ')}`
   }
 
-  // SNMP remote logic
   if (command === 'snmpwalk' && args.length > 0) {
     const targetIp = args.find(a => /^\d+\.\d+\.\d+\.\d+$/.test(a))
     if (targetIp) {
