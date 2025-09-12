@@ -35,15 +35,20 @@ async function runCommand(command, args = [], value = '') {
       const remote = snmpRemotes.find(r => targetIp.startsWith(r.subnet))
       if (remote && process.env.SNMP_TOKEN) {
         try {
-          const response = await axios.post(remote.url, {
+          const postData = {
             cmdText: fullCommand,
-            value: value
-          }, {
-            headers: {
-              Authorization: process.env.SNMP_TOKEN,
-              'Content-Type': 'application/json'
-            }
+            value: value === undefined ? '' : value
+          }
+          const postHeaders = {
+            Authorization: process.env.SNMP_TOKEN,
+            'Content-Type': 'application/json'
+          }
+          logWithTime('[DEBUG] SNMP remote axios POST:', {
+            url: remote.url,
+            headers: postHeaders,
+            data: postData
           })
+          const response = await axios.post(remote.url, postData, { headers: postHeaders })
           return response.data.result || response.data || ''
         } catch (err) {
           logWithTime('[ERROR] SNMP remote axios:', err.message || err)
