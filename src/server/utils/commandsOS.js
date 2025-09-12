@@ -46,9 +46,31 @@ async function runCommand(command, args = [], value = '') {
             'Content-Type': 'application/json'
           }
           const response = await axios.post(remote.url, postData, { headers: postHeaders })
-          return response.data.result || response.data || ''
+          const stdout = response.data.result || ''
+          const stderr = response.data.stderr || ''
+          if (command.includes('pfctl')) {
+            logWithTime(`${command} out: ${stdout}`)
+          }
+          if (stderr && stderr.toLowerCase().includes('timeout')) {
+            logWithTime(`[ERROR] Timeout for ${command}`)
+          } else if (stderr) {
+            logWithTime(`[ERROR] ${command}: ${stderr.split('\n')[0]}`)
+          }
+          if (fullCommand.includes('1.3.6.1.2.1.31.1.1.1.6') || fullCommand.includes('1.3.6.1.2.1.31.1.1.1.10')) {
+            return stdout.split(' ').pop().trim()
+          }
+          if (stdout.includes(value)) {
+            return 'Status OK'
+          } else {
+            return 'Status PROBLEM'
+          }
+          return { stdout, stderr }
         } catch (err) {
-          logWithTime('[ERROR] SNMP remote axios:', err.message || err)
+          if (err && err.message && err.message.toLowerCase().includes('timeout')) {
+            logWithTime(`[ERROR] Timeout for ${command}`)
+          } else {
+            logWithTime('[ERROR] SNMP remote axios:', err.message || err)
+          }
           return null
         }
       }
