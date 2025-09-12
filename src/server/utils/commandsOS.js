@@ -43,11 +43,6 @@ async function runCommand(command, args = [], value = '') {
             Authorization: process.env.SNMP_TOKEN,
             'Content-Type': 'application/json'
           }
-          logWithTime('[DEBUG] SNMP remote axios POST:', {
-            url: remote.url,
-            headers: postHeaders,
-            data: postData
-          })
           const response = await axios.post(remote.url, postData, { headers: postHeaders })
           return response.data.result || response.data || ''
         } catch (err) {
