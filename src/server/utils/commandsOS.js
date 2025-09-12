@@ -29,7 +29,7 @@ async function runCommand(command, args = [], value = '') {
     fullCommand += ` ${args.join(' ')}`
   }
 
-  if (command === 'snmpwalk' && args.length > 0) {
+  if (command.includes('snmpwalk') && args.length > 0) {
     const targetIp = args.find(a => /^\d+\.\d+\.\d+\.\d+$/.test(a))
     if (targetIp) {
       const remote = snmpRemotes.find(r => targetIp.startsWith(r.subnet))
