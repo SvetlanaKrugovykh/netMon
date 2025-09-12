@@ -14,6 +14,11 @@ const util = require('util')
 const exec = util.promisify(require('child_process').exec)
 
 async function runCommand(command, args = [], value = '') {
+  function logWithTime(...args) {
+    const now = new Date()
+    const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`
+    console.error(ts, ...args)
+  }
   let fullCommand = command
 
   // if (command === 'snmpwalk' && process.env.SNMP_SOURCE_IP) {
@@ -31,7 +36,8 @@ async function runCommand(command, args = [], value = '') {
       if (remote && process.env.SNMP_TOKEN) {
         try {
           const response = await axios.post(remote.url, {
-            command: fullCommand
+            cmdText: fullCommand,
+            value: value
           }, {
             headers: {
               Authorization: process.env.SNMP_TOKEN,
@@ -40,7 +46,7 @@ async function runCommand(command, args = [], value = '') {
           })
           return response.data.result || response.data || ''
         } catch (err) {
-          console.error('[ERROR] SNMP remote axios:', err.message || err)
+          logWithTime('[ERROR] SNMP remote axios:', err.message || err)
           return null
         }
       }
@@ -49,12 +55,12 @@ async function runCommand(command, args = [], value = '') {
   try {
     const { stdout, stderr } = await exec(fullCommand)
     if (command.includes('pfctl')) {
-      console.log(`${new Date()}: ${command} out: ${stdout}`)
+      logWithTime(`${command} out: ${stdout}`)
     }
     if (stderr && stderr.toLowerCase().includes('timeout')) {
-      console.error(`[ERROR] Timeout for ${command}`)
+      logWithTime(`[ERROR] Timeout for ${command}`)
     } else if (stderr) {
-      console.error(`[ERROR] ${command}: ${stderr.split('\n')[0]}`)
+      logWithTime(`[ERROR] ${command}: ${stderr.split('\n')[0]}`)
     }
     if (fullCommand.includes('1.3.6.1.2.1.31.1.1.1.6') || fullCommand.includes('1.3.6.1.2.1.31.1.1.1.10')) {
       return stdout.split(' ').pop().trim()
@@ -67,9 +73,9 @@ async function runCommand(command, args = [], value = '') {
     return { stdout, stderr }
   } catch (error) {
     if (error && error.message && error.message.toLowerCase().includes('timeout')) {
-      console.error(`[ERROR] Timeout for ${command}`)
+      logWithTime(`[ERROR] Timeout for ${command}`)
     } else {
-      console.error(`[ERROR] ${command}: ${error.message}`)
+      logWithTime(`[ERROR] ${command}: ${error.message}`)
     }
     return null
   }
