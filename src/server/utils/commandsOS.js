@@ -35,14 +35,8 @@ async function runCommand(command, args = [], value = '') {
       const remote = snmpRemotes.find(r => targetIp.startsWith(r.subnet))
       if (remote && process.env.SNMP_TOKEN) {
         try {
-          const snmpArgs = args.slice(0)
-          const ipIndex = snmpArgs.findIndex(a => /^\d+\.\d+\.\d+\.\d+$/.test(a))
-          if (ipIndex !== -1) {
-            snmpArgs[ipIndex] = targetIp
-          }
-          const singleCommand = command
           const postData = {
-            cmdText: singleCommand,
+            cmdText: fullCommand,
             value: value === undefined ? '' : value
           }
           logWithTime('[REMOTE SNMP POST]', { url: remote.url, body: postData })
