@@ -13,6 +13,19 @@
       "runtimeArgs": [
         "--inspect"
       ]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "snmp_remote",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "runtimeExecutable": "node",
+      "program": "${workspaceFolder}/tests/test_snmp_remote_runCommand.js",
+      "runtimeArgs": [
+        "--inspect"
+      ]
     }
   ]
 }
