@@ -1,3 +1,4 @@
+src/server/utils/snmp_remotes.json
 node_modules/
 .env
 *.log

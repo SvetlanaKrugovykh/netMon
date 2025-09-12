@@ -1,3 +1,15 @@
+const fs = require('fs')
+const path = require('path')
+const axios = require('axios')
+require('dotenv').config()
+
+let snmpRemotes = []
+try {
+  const remotesPath = path.join(__dirname, 'snmp_remotes.json')
+  snmpRemotes = JSON.parse(fs.readFileSync(remotesPath, 'utf8'))
+} catch (e) {
+  snmpRemotes = []
+}
 const util = require('util')
 const exec = util.promisify(require('child_process').exec)
 
@@ -8,6 +20,30 @@ async function runCommand(command, args = [], value = '') {
   }
   if (args.length > 0) {
     fullCommand += ` ${args.join(' ')}`
+  }
+
+  // SNMP remote logic
+  if (command === 'snmpwalk' && args.length > 0) {
+    const targetIp = args.find(a => /^\d+\.\d+\.\d+\.\d+$/.test(a))
+    if (targetIp) {
+      const remote = snmpRemotes.find(r => targetIp.startsWith(r.subnet))
+      if (remote && process.env.SNMP_TOKEN) {
+        try {
+          const response = await axios.post(remote.url, {
+            command: fullCommand
+          }, {
+            headers: {
+              Authorization: process.env.SNMP_TOKEN,
+              'Content-Type': 'application/json'
+            }
+          })
+          return response.data.result || response.data || ''
+        } catch (err) {
+          console.error('[ERROR] SNMP remote axios:', err.message || err)
+          return null
+        }
+      }
+    }
   }
   try {
     const { stdout, stderr } = await exec(fullCommand)
