@@ -45,6 +45,7 @@ async function runCommand(command, args = [], value = '') {
             cmdText: singleCommand,
             value: value === undefined ? '' : value
           }
+          logWithTime('[REMOTE SNMP POST]', { url: remote.url, body: postData })
           const postHeaders = {
             Authorization: process.env.SNMP_TOKEN,
             'Content-Type': 'application/json'
