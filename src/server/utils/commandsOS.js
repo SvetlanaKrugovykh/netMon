@@ -20,6 +20,7 @@ async function runCommand(command, args = [], value = '') {
     console.error(ts, ...args)
   }
   let fullCommand = command
+  const SNMP_DEBUG_LEVEL = parseInt(process.env.SNMP_DEBUG_LEVEL) || 0
 
   // if (command === 'snmpwalk' && process.env.SNMP_SOURCE_IP) {
   //   fullCommand += ` -s ${process.env.SNMP_SOURCE_IP}`
@@ -39,7 +40,7 @@ async function runCommand(command, args = [], value = '') {
             cmdText: fullCommand,
             value: value === undefined ? '' : value
           }
-          logWithTime('[REMOTE SNMP POST]', { url: remote.url, body: postData })
+          if (SNMP_DEBUG_LEVEL > 0) logWithTime('[REMOTE SNMP POST]', { url: remote.url, body: postData })
           const postHeaders = {
             Authorization: process.env.SNMP_TOKEN,
             'Content-Type': 'application/json'
