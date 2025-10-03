@@ -153,7 +153,11 @@ async function loadSnmpObjectsList() {
       console.error('ResponseArray is missing in parsedData:', parsedData)
       return []
     }
-    return parsedData.ResponseArray
+    // Add lastValue to each object for status tracking
+    return parsedData.ResponseArray.map(obj => ({
+      ...obj,
+      lastValue: obj.value !== undefined ? obj.value : ''
+    }))
   } catch (err) {
     console.error('Error in loadSnmpObjectsList:', err)
     return []
