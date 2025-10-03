@@ -26,6 +26,19 @@
       "runtimeArgs": [
         "--inspect"
       ]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "snmp_load",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "runtimeExecutable": "node",
+      "program": "${workspaceFolder}/tests/test_snmp_load.js",
+      "runtimeArgs": [
+        "--inspect"
+      ]
     }
   ]
 }

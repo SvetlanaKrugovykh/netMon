@@ -48,23 +48,30 @@ async function handleStatusChange(args) {
   if (existingIndex !== -1) {
     addToList[existingIndex].count++
     // Check for value change within the same status
-    const prevValue = addToList[existingIndex].lastValue
-    const newValue = ip_address.value
-    if (prevValue !== undefined && newValue !== undefined && prevValue !== newValue) {
+    const prevValue = addToList[existingIndex].lastValue;
+    const newValue = ip_address.value;
+    // Try to compare as numbers if possible
+    const prevNum = parseFloat(prevValue);
+    const newNum = parseFloat(newValue);
+    const bothNumbers = !isNaN(prevNum) && !isNaN(newNum);
+    if (
+      (bothNumbers && prevNum !== newNum) ||
+      (!bothNumbers && prevValue !== undefined && newValue !== undefined && prevValue !== newValue)
+    ) {
       // Value changed — write to DB and update lastValue
-      let resource = ''
+      let resource = '';
       if (service === true) {
         if (ip_address.Port === undefined) {
-          resource = `Snmp oid:${ip_address.oid}<=>${ip_address.value}`
+          resource = `Snmp oid:${ip_address.oid}<=>${ip_address.value}`;
         } else {
-          resource = `Service Port:${ip_address.Port}`
+          resource = `Service Port:${ip_address.Port}`;
         }
       } else {
-        resource = 'Host'
+        resource = 'Host';
       }
-      let msg = `${resource} ${ip_address.ip_address} (${ip_address.description}) ⇆ from ${fromStatus} to ${toStatus}\n${response}`
-      sendReqToDB('__SaveStatusChangeToDb__', `${ip_address.ip_address}#${fromStatus}#${toStatus}#${service}#${ip_address.oid}#${response}#`, '')
-      addToList[existingIndex].lastValue = newValue
+      let msg = `${resource} ${ip_address.ip_address} (${ip_address.description}) ⇆ from ${fromStatus} to ${toStatus}\n${response}`;
+      sendReqToDB('__SaveStatusChangeToDb__', `${ip_address.ip_address}#${fromStatus}#${toStatus}#${service}#${ip_address.oid}#${response}#`, '');
+      addToList[existingIndex].lastValue = newValue;
     }
     ip_address.status = toStatus
     return
