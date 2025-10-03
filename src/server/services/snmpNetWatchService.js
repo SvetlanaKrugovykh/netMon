@@ -154,10 +154,29 @@ async function loadSnmpObjectsList() {
       return []
     }
     // Add lastValue to each object for status tracking
-    return parsedData.ResponseArray.map(obj => ({
-      ...obj,
-      lastValue: obj.value !== undefined ? obj.value : ''
-    }))
+    // Use lastValue from response if present, parse only the numeric part
+    return parsedData.ResponseArray.map(obj => {
+      let rawLastValue = obj.lastValue !== undefined ? obj.lastValue : (obj.value !== undefined ? obj.value : '')
+      let parsedLastValue = ''
+      if (typeof rawLastValue === 'string') {
+        // Remove 'value', 'Status OK', 'Status PROBLEM', and extra spaces
+        parsedLastValue = rawLastValue
+          .replace(/value/gi, '')
+          .replace(/Status OK/gi, '')
+          .replace(/Status PROBLEM/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        // Try to extract the number if present
+        const match = parsedLastValue.match(/-?\d+(\.\d+)?/)
+        parsedLastValue = match ? match[0] : ''
+      } else if (typeof rawLastValue === 'number') {
+        parsedLastValue = rawLastValue.toString()
+      }
+      return {
+        ...obj,
+        lastValue: parsedLastValue
+      }
+    })
   } catch (err) {
     console.error('Error in loadSnmpObjectsList:', err)
     return []
