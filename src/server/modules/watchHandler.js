@@ -35,12 +35,32 @@ async function handleStatusChange(args) {
   }
 
   const existingIndex = addToList.findIndex(item => {
-    const isMatchingIp = item.ip_address === ip_address.ip_address
-    const isMatchingOid = ip_address.oid && item.oid === ip_address.oid.toString()
-    const isMatchingPort = ip_address.Port && item.Port === ip_address.Port.toString()
-
-    return (isMatchingIp && (isMatchingOid || isMatchingPort)) || (!ip_address.oid && !ip_address.Port && isMatchingIp)
-  })
+    const isMatchingIp = item.ip_address === ip_address.ip_address;
+    const isMatchingOid = ip_address.oid && item.oid === ip_address.oid.toString();
+    const isMatchingPort = ip_address.Port && item.Port === ip_address.Port?.toString();
+    const result = (isMatchingIp && (isMatchingOid || isMatchingPort)) || (!ip_address.oid && !ip_address.Port && isMatchingIp)
+    if (!result) {
+      console.log('[DEBUG handleStatusChange] Not matched:', {
+        item_ip: item.ip_address,
+        arg_ip: ip_address.ip_address,
+        item_oid: item.oid,
+        arg_oid: ip_address.oid,
+        item_port: item.Port,
+        arg_port: ip_address.Port
+      })
+    }
+    return result
+  });
+  if (existingIndex === -1) {
+    console.log('[DEBUG handleStatusChange] No match found in addToList for:', {
+      ip_address: ip_address.ip_address,
+      oid: ip_address.oid,
+      Port: ip_address.Port
+    });
+    if (addToList.length > 0) {
+      console.log('[DEBUG handleStatusChange] addToList contents:', addToList)
+    }
+  }
 
 
   console.log(`${new Date().toISOString()}:handleStatusChange: removeFromList, addToList, ${removeFromList.length}, ${addToList.length} service = ${service}`)
