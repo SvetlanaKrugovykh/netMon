@@ -11,37 +11,39 @@ const alivesnmpObjectIP = []
 const deadsnmpObjectIP = []
 
 
-async function checksnmpObjectStatus(snmpObject) {
+async function checksnmpObjectStatus(snmpObject, cycleId) {
   const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19)
   let response = ''
   try {
+    console.log(`[SNMP] checksnmpObjectStatus`, { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid, status: snmpObject.status })
     if (snmpObject.value.length < 10) {
       response = await snmpGet(snmpObject)
     } else {
       response = await runCommand('snmpwalk', ['-v', '2c', '-c', 'public', '-OXsq', '-On', snmpObject.ip_address, snmpObject.oid], snmpObject.value)
     }
     if (response && typeof response === 'string' && response.includes('Status OK')) {
-      handleSnmpObjectAliveStatus(snmpObject, response)
+      handleSnmpObjectAliveStatus(snmpObject, response, cycleId)
     } else {
-      console.log(`${formattedDate} ip:${snmpObject.ip_address} ${snmpObject.description} response: ${response} oid:${snmpObject.oid}`)
-      handleSnmpObjectDeadStatus(snmpObject, response)
+      console.log(`[SNMP] DEAD`, { cycleId, ip: snmpObject.ip_address, desc: snmpObject.description, response, oid: snmpObject.oid })
+      handleSnmpObjectDeadStatus(snmpObject, response, cycleId)
     }
   } catch (err) {
-    console.log(err)
+    console.log(`[SNMP] Exception in checksnmpObjectStatus`, { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid, error: err && err.message ? err.message : err })
   }
 }
 
 
-async function handleSnmpObjectDeadStatus(snmpObject, response) {
+async function handleSnmpObjectDeadStatus(snmpObject, response, cycleId) {
   if (!snmpObject.ip_address) {
-    console.log('handlesnmpObjectAliveStatus: snmpObject.ip_address is undefined', snmpObject)
+    console.log('[SNMP] handleSnmpObjectDeadStatus: ip_address is undefined', { cycleId, snmpObject })
     return
   }
   try {
     const foundIndexDead = deadsnmpObjectIP.findIndex(item => (item.ip_address === snmpObject.ip_address && item.oid === snmpObject.oid))
     const loadStatus = snmpObject.status.toLowerCase()
     if (loadStatus === Status.ALIVE) {
-      await handleStatusChange({ ip_address: snmpObject, removeFromList: alivesnmpObjectIP, addToList: deadsnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.DEAD, service: true, response })
+      console.log('[SNMP] handleStatusChange ALIVE->DEAD', { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
+      await handleStatusChange({ ip_address: snmpObject, removeFromList: alivesnmpObjectIP, addToList: deadsnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.DEAD, service: true, response, cycleId })
     } else {
       let prevValue = ''
       if (foundIndexDead !== -1) prevValue = deadsnmpObjectIP[foundIndexDead].lastValue
@@ -61,7 +63,8 @@ async function handleSnmpObjectDeadStatus(snmpObject, response) {
       const bothNumbers = !isNaN(prevNum) && !isNaN(newNum)
       const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
       if (valueChanged) {
-        await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: deadsnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.DEAD, service: true, response })
+        console.log('[SNMP] handleStatusChange DEAD->DEAD valueChanged', { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
+        await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: deadsnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.DEAD, service: true, response, cycleId })
       }
       if (foundIndexDead === -1) {
         deadsnmpObjectIP.push({ ip_address: snmpObject.ip_address, oid: snmpObject.oid, count: 1, lastValue: snmpObject.value })
@@ -72,20 +75,21 @@ async function handleSnmpObjectDeadStatus(snmpObject, response) {
       snmpObject.status = Status.DEAD
     }
   } catch (err) {
-    console.error('Error in handleSnmpObjectDeadStatus:', err)
+    console.error('[SNMP] Error in handleSnmpObjectDeadStatus', { cycleId, error: err && err.message ? err.message : err })
   }
 }
 
-async function handleSnmpObjectAliveStatus(snmpObject, response) {
+async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
   if (!snmpObject.ip_address) {
-    console.log('handlesnmpObjectAliveStatus: snmpObject.ip_address is undefined', snmpObject)
+    console.log('[SNMP] handleSnmpObjectAliveStatus: ip_address is undefined', { cycleId, snmpObject })
     return
   }
   try {
     const foundIndexAlive = alivesnmpObjectIP.findIndex(item => (item.ip_address === snmpObject.ip_address && item.oid === snmpObject.oid))
     const loadStatus = snmpObject.status.toLowerCase()
     if (loadStatus === Status.DEAD) {
-      await handleStatusChange({ ip_address: snmpObject, removeFromList: deadsnmpObjectIP, addToList: alivesnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.ALIVE, service: true, response })
+      console.log('[SNMP] handleStatusChange DEAD->ALIVE', { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
+      await handleStatusChange({ ip_address: snmpObject, removeFromList: deadsnmpObjectIP, addToList: alivesnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.ALIVE, service: true, response, cycleId })
     } else {
       let prevValue = ''
       if (foundIndexAlive !== -1) prevValue = alivesnmpObjectIP[foundIndexAlive].lastValue
@@ -105,7 +109,8 @@ async function handleSnmpObjectAliveStatus(snmpObject, response) {
       const bothNumbers = !isNaN(prevNum) && !isNaN(newNum)
       const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
       if (valueChanged) {
-        await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: alivesnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.ALIVE, service: true, response })
+        console.log('[SNMP] handleStatusChange ALIVE->ALIVE valueChanged', { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
+        await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: alivesnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.ALIVE, service: true, response, cycleId })
       }
       if (foundIndexAlive === -1) {
         alivesnmpObjectIP.push({ ip_address: snmpObject.ip_address, oid: snmpObject.oid, count: 1, lastValue: snmpObject.value })
@@ -116,7 +121,7 @@ async function handleSnmpObjectAliveStatus(snmpObject, response) {
       snmpObject.status = Status.ALIVE
     }
   } catch (err) {
-    console.error('Error in handleSnmpObjectAliveStatus:', err)
+    console.error('[SNMP] Error in handleSnmpObjectAliveStatus', { cycleId, error: err && err.message ? err.message : err })
   }
 }
 

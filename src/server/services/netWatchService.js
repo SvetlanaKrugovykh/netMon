@@ -49,15 +49,20 @@ async function netWatchStarter() {
   }
 
   if (process.env.SNMP_POOLING_ENABLE === 'true') {
+    let snmpCycleId = 0
     async function pollSnmpObjectsSequentially() {
+      snmpCycleId++
+      const cycleTimestamp = new Date().toISOString()
+      console.log(`[SNMP] Start poll cycle`, { cycleId: snmpCycleId, timestamp: cycleTimestamp, objects: snmpObjectsList.length })
       for (const snmpObject of snmpObjectsList) {
         try {
-          await checksnmpObjectStatus(snmpObject)
+          await checksnmpObjectStatus(snmpObject, snmpCycleId)
         } catch (err) {
-          console.log(err);
+          console.log(`[SNMP] Error in poll cycle`, { cycleId: snmpCycleId, ip: snmpObject.ip_address, oid: snmpObject.oid, error: err && err.message ? err.message : err })
         }
         await new Promise(res => setTimeout(res, 3000))
       }
+      console.log(`[SNMP] End poll cycle`, { cycleId: snmpCycleId, timestamp: new Date().toISOString() })
     }
     setInterval(() => {
       pollSnmpObjectsSequentially()
