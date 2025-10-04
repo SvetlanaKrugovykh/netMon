@@ -56,7 +56,7 @@ async function handleStatusChange(args) {
       ip_address: ip_address.ip_address,
       oid: ip_address.oid,
       Port: ip_address.Port
-    });
+    })
     if (addToList.length > 0) {
       console.log('[DEBUG handleStatusChange] addToList contents:', addToList)
     }
