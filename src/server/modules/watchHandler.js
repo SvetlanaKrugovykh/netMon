@@ -62,25 +62,39 @@ async function handleStatusChange(args) {
     const prevNum = parseFloat(prevValueStr)
     const newNum = parseFloat(newValueStr)
     const bothNumbers = !isNaN(prevNum) && !isNaN(newNum)
+    console.log('[DEBUG handleStatusChange]', {
+      prevValue,
+      newValue,
+      prevValueStr,
+      newValueStr,
+      prevNum,
+      newNum,
+      bothNumbers,
+      conditionNumbers: bothNumbers && prevNum !== newNum,
+      conditionStrings: !bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr,
+      skipBecauseEmpty: (!prevValueStr || !newValueStr)
+    })
     if (
       (bothNumbers && prevNum !== newNum) ||
       (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
     ) {
       if (!prevValueStr || !newValueStr) {
-        return
+        console.log('[DEBUG handleStatusChange] SKIP: one of values is empty after clean');
+        return;
       }
+      console.log('[DEBUG handleStatusChange] SENDING: value changed, writing to DB and sending message');
       let resource = '';
       if (service === true) {
         if (ip_address.Port === undefined) {
-          resource = `Snmp oid:${ip_address.oid}<=>${ip_address.value}`
+          resource = `Snmp oid:${ip_address.oid}<=>${ip_address.value}`;
         } else {
-          resource = `Service Port:${ip_address.Port}`
+          resource = `Service Port:${ip_address.Port}`;
         }
       } else {
-        resource = 'Host'
+        resource = 'Host';
       }
-      let msg = `${resource} ${ip_address.ip_address} (${ip_address.description}) ⇆ from ${fromStatus} to ${toStatus}\n${response}`
-      sendReqToDB('__SaveStatusChangeToDb__', `${ip_address.ip_address}#${fromStatus}#${toStatus}#${service}#${ip_address.oid}#${response}#`, '')
+      let msg = `${resource} ${ip_address.ip_address} (${ip_address.description}) ⇆ from ${fromStatus} to ${toStatus}\n${response}`;
+      sendReqToDB('__SaveStatusChangeToDb__', `${ip_address.ip_address}#${fromStatus}#${toStatus}#${service}#${ip_address.oid}#${response}#`, '');
       addToList[existingIndex].lastValue = newValue;
     }
     ip_address.status = toStatus
