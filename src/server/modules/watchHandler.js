@@ -49,8 +49,16 @@ async function handleStatusChange(args) {
     addToList[existingIndex].count++
     const prevValue = addToList[existingIndex].lastValue
     const newValue = ip_address.value
-    const prevValueStr = (prevValue ?? '').toString().trim()
-    const newValueStr = (newValue ?? '').toString().trim()
+    function cleanVal(val) {
+      return (val ?? '').toString()
+        .replace(/value/gi, '')
+        .replace(/Status OK/gi, '')
+        .replace(/Status PROBLEM/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+    }
+    const prevValueStr = cleanVal(prevValue)
+    const newValueStr = cleanVal(newValue)
     const prevNum = parseFloat(prevValueStr)
     const newNum = parseFloat(newValueStr)
     const bothNumbers = !isNaN(prevNum) && !isNaN(newNum)
