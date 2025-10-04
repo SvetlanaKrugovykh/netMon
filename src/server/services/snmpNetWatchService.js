@@ -43,10 +43,21 @@ async function handleSnmpObjectDeadStatus(snmpObject, response) {
     if (loadStatus === Status.ALIVE) {
       await handleStatusChange({ ip_address: snmpObject, removeFromList: alivesnmpObjectIP, addToList: deadsnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.DEAD, service: true, response })
     } else {
+      let prevValue = ''
+      if (foundIndexDead !== -1) prevValue = deadsnmpObjectIP[foundIndexDead].lastValue;
+      const newValue = snmpObject.value
+      const prevNum = parseFloat(prevValue)
+      const newNum = parseFloat(newValue)
+      const bothNumbers = !isNaN(prevNum) && !isNaN(newNum)
+      const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValue !== undefined && newValue !== undefined && prevValue !== newValue)
+      if (valueChanged) {
+        await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: deadsnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.DEAD, service: true, response })
+      }
       if (foundIndexDead === -1) {
-        deadsnmpObjectIP.push({ ip_address: snmpObject.ip_address, oid: snmpObject.oid, count: 1 })
+        deadsnmpObjectIP.push({ ip_address: snmpObject.ip_address, oid: snmpObject.oid, count: 1, lastValue: snmpObject.value })
       } else {
         deadsnmpObjectIP[foundIndexDead].count++
+        deadsnmpObjectIP[foundIndexDead].lastValue = snmpObject.value
       }
       snmpObject.status = Status.DEAD
     }
@@ -66,10 +77,22 @@ async function handleSnmpObjectAliveStatus(snmpObject, response) {
     if (loadStatus === Status.DEAD) {
       await handleStatusChange({ ip_address: snmpObject, removeFromList: deadsnmpObjectIP, addToList: alivesnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.ALIVE, service: true, response })
     } else {
+      // Проверяем изменение значения
+      let prevValue = '';
+      if (foundIndexAlive !== -1) prevValue = alivesnmpObjectIP[foundIndexAlive].lastValue;
+      const newValue = snmpObject.value;
+      const prevNum = parseFloat(prevValue);
+      const newNum = parseFloat(newValue);
+      const bothNumbers = !isNaN(prevNum) && !isNaN(newNum);
+      const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValue !== undefined && newValue !== undefined && prevValue !== newValue);
+      if (valueChanged) {
+        await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: alivesnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.ALIVE, service: true, response });
+      }
       if (foundIndexAlive === -1) {
-        alivesnmpObjectIP.push({ ip_address: snmpObject.ip_address, oid: snmpObject.oid, count: 1 })
+        alivesnmpObjectIP.push({ ip_address: snmpObject.ip_address, oid: snmpObject.oid, count: 1, lastValue: snmpObject.value })
       } else {
         alivesnmpObjectIP[foundIndexAlive].count++
+        alivesnmpObjectIP[foundIndexAlive].lastValue = snmpObject.value
       }
       snmpObject.status = Status.ALIVE
     }
