@@ -5,7 +5,7 @@ let telegramBotToken = process.env.TELEGRAM_BOT_TOKEN
 let telegramChatId = process.env.TELEGRAM_CHAT_ID
 
 let lastTelegramSendTime = 0
-const TELEGRAM_SEND_DELAY = 5000 // ms
+const TELEGRAM_SEND_DELAY = 2000 // ms
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -62,18 +62,6 @@ async function handleStatusChange(args) {
     const prevNum = parseFloat(prevValueStr)
     const newNum = parseFloat(newValueStr)
     const bothNumbers = !isNaN(prevNum) && !isNaN(newNum)
-    console.log('[DEBUG handleStatusChange]', {
-      prevValue,
-      newValue,
-      prevValueStr,
-      newValueStr,
-      prevNum,
-      newNum,
-      bothNumbers,
-      conditionNumbers: bothNumbers && prevNum !== newNum,
-      conditionStrings: !bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr,
-      skipBecauseEmpty: (!prevValueStr || !newValueStr)
-    })
     if (
       (bothNumbers && prevNum !== newNum) ||
       (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
@@ -141,6 +129,7 @@ async function sendTelegramMessage(message) {
   const now = Date.now()
   const waitTime = lastTelegramSendTime + TELEGRAM_SEND_DELAY - now
   if (waitTime > 0) {
+    console.log(`[TELEGRAM] Waiting ${waitTime}ms before sending message`)
     await sleep(waitTime)
   }
   try {
@@ -148,14 +137,17 @@ async function sendTelegramMessage(message) {
     modifiedText = modifiedText.replace("dead", "❌")
     modifiedText = modifiedText.replace("Warning", "⚠️")
     modifiedText = modifiedText.replace("Info", "ℹ️")
+    console.log('[TELEGRAM] Sending message:', modifiedText)
     await sendTelegramMessageToExceptionWoda(message)
     const response = await sendToChat(apiUrl, telegramBotToken, telegramChatId, modifiedText)
     lastTelegramSendTime = Date.now()
     if (!response) {
-      console.log('Error sending Telegram message.')
+      console.log('[TELEGRAM] Error sending Telegram message.')
+    } else {
+      console.log('[TELEGRAM] Message sent successfully')
     }
   } catch (error) {
-    console.error('Error sending Telegram message:', error?.message || error)
+    console.error('[TELEGRAM] Error sending Telegram message:', error?.message || error)
   }
 }
 
@@ -164,9 +156,8 @@ async function sendTelegramMessageToExceptionWoda(message) {
     if (!message.includes('WODA') && !message.includes('GARAZH') && !message.includes('VLans874')) {
       return
     }
-
   } catch (error) {
-    console.error('Error message.includes(EXCEPTION_Msgs)', error)
+    console.error('[TELEGRAM] Error message.includes(EXCEPTION_Msgs)', error)
     return
   }
 
@@ -177,12 +168,15 @@ async function sendTelegramMessageToExceptionWoda(message) {
   try {
     let modifiedText = message.replace("alive", "✅")
     modifiedText = modifiedText.replace("dead", "❌")
+    console.log('[TELEGRAM] Sending EXCEPTION message:', modifiedText)
     const response = await sendToChat(apiUrl, telegramBotTokenSilver, EXCEPTION_ID_WODA, modifiedText)
     if (!response) {
-      console.log('Error sending Telegram message.')
+      console.log('[TELEGRAM] Error sending Telegram EXCEPTION message.')
+    } else {
+      console.log('[TELEGRAM] EXCEPTION message sent successfully')
     }
   } catch (error) {
-    console.error('Error sending Telegram message:', error)
+    console.error('[TELEGRAM] Error sending Telegram EXCEPTION message:', error)
   }
 }
 

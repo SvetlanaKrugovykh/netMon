@@ -43,15 +43,25 @@ async function handleSnmpObjectDeadStatus(snmpObject, response) {
     if (loadStatus === Status.ALIVE) {
       await handleStatusChange({ ip_address: snmpObject, removeFromList: alivesnmpObjectIP, addToList: deadsnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.DEAD, service: true, response })
     } else {
-      let prevValue = ''
+      let prevValue = '';
       if (foundIndexDead !== -1) prevValue = deadsnmpObjectIP[foundIndexDead].lastValue;
-      const newValue = snmpObject.value
-      const prevNum = parseFloat(prevValue)
-      const newNum = parseFloat(newValue)
-      const bothNumbers = !isNaN(prevNum) && !isNaN(newNum)
-      const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValue !== undefined && newValue !== undefined && prevValue !== newValue)
+      const newValue = snmpObject.value;
+      function cleanVal(val) {
+        return (val ?? '').toString()
+          .replace(/value/gi, '')
+          .replace(/Status OK/gi, '')
+          .replace(/Status PROBLEM/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+      const prevValueStr = cleanVal(prevValue);
+      const newValueStr = cleanVal(newValue);
+      const prevNum = parseFloat(prevValueStr);
+      const newNum = parseFloat(newValueStr);
+      const bothNumbers = !isNaN(prevNum) && !isNaN(newNum);
+      const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr);
       if (valueChanged) {
-        await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: deadsnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.DEAD, service: true, response })
+        await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: deadsnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.DEAD, service: true, response });
       }
       if (foundIndexDead === -1) {
         deadsnmpObjectIP.push({ ip_address: snmpObject.ip_address, oid: snmpObject.oid, count: 1, lastValue: snmpObject.value })
@@ -81,10 +91,20 @@ async function handleSnmpObjectAliveStatus(snmpObject, response) {
       let prevValue = '';
       if (foundIndexAlive !== -1) prevValue = alivesnmpObjectIP[foundIndexAlive].lastValue;
       const newValue = snmpObject.value;
-      const prevNum = parseFloat(prevValue);
-      const newNum = parseFloat(newValue);
+      function cleanVal(val) {
+        return (val ?? '').toString()
+          .replace(/value/gi, '')
+          .replace(/Status OK/gi, '')
+          .replace(/Status PROBLEM/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+      const prevValueStr = cleanVal(prevValue);
+      const newValueStr = cleanVal(newValue);
+      const prevNum = parseFloat(prevValueStr);
+      const newNum = parseFloat(newValueStr);
       const bothNumbers = !isNaN(prevNum) && !isNaN(newNum);
-      const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValue !== undefined && newValue !== undefined && prevValue !== newValue);
+      const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr);
       if (valueChanged) {
         await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: alivesnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.ALIVE, service: true, response });
       }
