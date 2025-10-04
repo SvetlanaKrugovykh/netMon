@@ -49,34 +49,33 @@ async function handleStatusChange(args) {
     addToList[existingIndex].count++
     // Check for value change within the same status
     const prevValue = addToList[existingIndex].lastValue
-    const newValue = ip_address.value;
-    // Try to compare as numbers if possible
-    const prevNum = parseFloat(prevValue)
-    const newNum = parseFloat(newValue)
+    const newValue = ip_address.value
+    const prevValueStr = (prevValue ?? '').toString().trim()
+    const newValueStr = (newValue ?? '').toString().trim()
+    const prevNum = parseFloat(prevValueStr)
+    const newNum = parseFloat(newValueStr)
     const bothNumbers = !isNaN(prevNum) && !isNaN(newNum)
     if (
       (bothNumbers && prevNum !== newNum) ||
-      (!bothNumbers && prevValue !== undefined && newValue !== undefined && prevValue !== newValue)
+      (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
     ) {
-      if (
-        (bothNumbers && (isNaN(prevNum) || isNaN(newNum))) ||
-        (!bothNumbers && (!prevValue || !newValue))
-      ) {
-        return
+      // Не писать в БД если хотя бы одно из значений пустое после trim
+      if (!prevValueStr || !newValueStr) {
+        return;
       }
       // Value changed — write to DB and update lastValue
-      let resource = ''
+      let resource = '';
       if (service === true) {
         if (ip_address.Port === undefined) {
-          resource = `Snmp oid:${ip_address.oid}<=>${ip_address.value}`
+          resource = `Snmp oid:${ip_address.oid}<=>${ip_address.value}`;
         } else {
-          resource = `Service Port:${ip_address.Port}`
+          resource = `Service Port:${ip_address.Port}`;
         }
       } else {
-        resource = 'Host'
+        resource = 'Host';
       }
       let msg = `${resource} ${ip_address.ip_address} (${ip_address.description}) ⇆ from ${fromStatus} to ${toStatus}\n${response}`;
-      sendReqToDB('__SaveStatusChangeToDb__', `${ip_address.ip_address}#${fromStatus}#${toStatus}#${service}#${ip_address.oid}#${response}#`, '')
+      sendReqToDB('__SaveStatusChangeToDb__', `${ip_address.ip_address}#${fromStatus}#${toStatus}#${service}#${ip_address.oid}#${response}#`, '');
       addToList[existingIndex].lastValue = newValue;
     }
     ip_address.status = toStatus
