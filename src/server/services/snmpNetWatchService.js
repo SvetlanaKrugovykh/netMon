@@ -43,25 +43,25 @@ async function handleSnmpObjectDeadStatus(snmpObject, response) {
     if (loadStatus === Status.ALIVE) {
       await handleStatusChange({ ip_address: snmpObject, removeFromList: alivesnmpObjectIP, addToList: deadsnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.DEAD, service: true, response })
     } else {
-      let prevValue = '';
-      if (foundIndexDead !== -1) prevValue = deadsnmpObjectIP[foundIndexDead].lastValue;
-      const newValue = snmpObject.value;
+      let prevValue = ''
+      if (foundIndexDead !== -1) prevValue = deadsnmpObjectIP[foundIndexDead].lastValue
+      const newValue = snmpObject.value
       function cleanVal(val) {
         return (val ?? '').toString()
           .replace(/value/gi, '')
           .replace(/Status OK/gi, '')
           .replace(/Status PROBLEM/gi, '')
           .replace(/\s+/g, ' ')
-          .trim();
+          .trim()
       }
-      const prevValueStr = cleanVal(prevValue);
-      const newValueStr = cleanVal(newValue);
-      const prevNum = parseFloat(prevValueStr);
-      const newNum = parseFloat(newValueStr);
-      const bothNumbers = !isNaN(prevNum) && !isNaN(newNum);
-      const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr);
+      const prevValueStr = cleanVal(prevValue)
+      const newValueStr = cleanVal(newValue)
+      const prevNum = parseFloat(prevValueStr)
+      const newNum = parseFloat(newValueStr)
+      const bothNumbers = !isNaN(prevNum) && !isNaN(newNum)
+      const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
       if (valueChanged) {
-        await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: deadsnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.DEAD, service: true, response });
+        await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: deadsnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.DEAD, service: true, response })
       }
       if (foundIndexDead === -1) {
         deadsnmpObjectIP.push({ ip_address: snmpObject.ip_address, oid: snmpObject.oid, count: 1, lastValue: snmpObject.value })
@@ -88,24 +88,24 @@ async function handleSnmpObjectAliveStatus(snmpObject, response) {
       await handleStatusChange({ ip_address: snmpObject, removeFromList: deadsnmpObjectIP, addToList: alivesnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.ALIVE, service: true, response })
     } else {
       let prevValue = ''
-      if (foundIndexAlive !== -1) prevValue = alivesnmpObjectIP[foundIndexAlive].lastValue;
-      const newValue = snmpObject.value;
+      if (foundIndexAlive !== -1) prevValue = alivesnmpObjectIP[foundIndexAlive].lastValue
+      const newValue = snmpObject.value
       function cleanVal(val) {
         return (val ?? '').toString()
           .replace(/value/gi, '')
           .replace(/Status OK/gi, '')
           .replace(/Status PROBLEM/gi, '')
           .replace(/\s+/g, ' ')
-          .trim();
+          .trim()
       }
-      const prevValueStr = cleanVal(prevValue);
-      const newValueStr = cleanVal(newValue);
-      const prevNum = parseFloat(prevValueStr);
-      const newNum = parseFloat(newValueStr);
-      const bothNumbers = !isNaN(prevNum) && !isNaN(newNum);
-      const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr);
+      const prevValueStr = cleanVal(prevValue)
+      const newValueStr = cleanVal(newValue)
+      const prevNum = parseFloat(prevValueStr)
+      const newNum = parseFloat(newValueStr)
+      const bothNumbers = !isNaN(prevNum) && !isNaN(newNum)
+      const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
       if (valueChanged) {
-        await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: alivesnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.ALIVE, service: true, response });
+        await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: alivesnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.ALIVE, service: true, response })
       }
       if (foundIndexAlive === -1) {
         alivesnmpObjectIP.push({ ip_address: snmpObject.ip_address, oid: snmpObject.oid, count: 1, lastValue: snmpObject.value })
@@ -122,13 +122,14 @@ async function handleSnmpObjectAliveStatus(snmpObject, response) {
 
 
 async function snmpGet(snmpObject, community = 'public') {
-  const session = new snmp.Session({ host: snmpObject.ip_address, community: community, timeout: 5000 })
+  const timeoutSec = parseInt(process.env.SNMP_CLIENT_TIMEOUT_SEC) || 5
+  const session = new snmp.Session({ host: snmpObject.ip_address, community: community, timeout: timeoutSec * 1000 })
 
   try {
     const varbinds = await new Promise((resolve, reject) => {
       session.get({ oid: snmpObject.oid }, (error, varbinds) => {
         session.close()
-        const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19);
+        const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19)
         if (error) {
           if (error.message && error.message.toLowerCase().includes('timeout')) {
             console.error(`${formattedDate} [ERROR] Timeout for SNMP get ${snmpObject.ip_address} ${snmpObject.oid}`)
@@ -147,7 +148,7 @@ async function snmpGet(snmpObject, community = 'public') {
       throw new Error('No response received')
     }
   } catch (error) {
-    const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19)
     if (error.message && error.message.toLowerCase().includes('timeout')) {
       console.error(`${formattedDate} [ERROR] Timeout for SNMP get ${snmpObject.ip_address} ${snmpObject.oid}`)
     } else {
@@ -209,7 +210,7 @@ async function loadSnmpObjectsList() {
           .replace(/Status OK/gi, '')
           .replace(/Status PROBLEM/gi, '')
           .replace(/\s+/g, ' ')
-          .trim();
+          .trim()
         // Try to extract the number if present
         const match = parsedLastValue.match(/-?\d+(\.\d+)?/)
         parsedLastValue = match ? match[0] : ''
