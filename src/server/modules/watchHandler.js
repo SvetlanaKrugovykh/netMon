@@ -47,7 +47,6 @@ async function handleStatusChange(args) {
 
   if (existingIndex !== -1) {
     addToList[existingIndex].count++
-    // Check for value change within the same status
     const prevValue = addToList[existingIndex].lastValue
     const newValue = ip_address.value
     const prevValueStr = (prevValue ?? '').toString().trim()
@@ -59,23 +58,21 @@ async function handleStatusChange(args) {
       (bothNumbers && prevNum !== newNum) ||
       (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
     ) {
-      // Не писать в БД если хотя бы одно из значений пустое после trim
       if (!prevValueStr || !newValueStr) {
-        return;
+        return
       }
-      // Value changed — write to DB and update lastValue
       let resource = '';
       if (service === true) {
         if (ip_address.Port === undefined) {
-          resource = `Snmp oid:${ip_address.oid}<=>${ip_address.value}`;
+          resource = `Snmp oid:${ip_address.oid}<=>${ip_address.value}`
         } else {
-          resource = `Service Port:${ip_address.Port}`;
+          resource = `Service Port:${ip_address.Port}`
         }
       } else {
-        resource = 'Host';
+        resource = 'Host'
       }
-      let msg = `${resource} ${ip_address.ip_address} (${ip_address.description}) ⇆ from ${fromStatus} to ${toStatus}\n${response}`;
-      sendReqToDB('__SaveStatusChangeToDb__', `${ip_address.ip_address}#${fromStatus}#${toStatus}#${service}#${ip_address.oid}#${response}#`, '');
+      let msg = `${resource} ${ip_address.ip_address} (${ip_address.description}) ⇆ from ${fromStatus} to ${toStatus}\n${response}`
+      sendReqToDB('__SaveStatusChangeToDb__', `${ip_address.ip_address}#${fromStatus}#${toStatus}#${service}#${ip_address.oid}#${response}#`, '')
       addToList[existingIndex].lastValue = newValue;
     }
     ip_address.status = toStatus
