@@ -56,7 +56,7 @@ async function netWatchStarter() {
         } catch (err) {
           console.log(err);
         }
-        await new Promise(res => setTimeout(res, 300))
+        await new Promise(res => setTimeout(res, 3000))
       }
     }
     setInterval(() => {

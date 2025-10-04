@@ -87,8 +87,7 @@ async function handleSnmpObjectAliveStatus(snmpObject, response) {
     if (loadStatus === Status.DEAD) {
       await handleStatusChange({ ip_address: snmpObject, removeFromList: deadsnmpObjectIP, addToList: alivesnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.ALIVE, service: true, response })
     } else {
-      // Проверяем изменение значения
-      let prevValue = '';
+      let prevValue = ''
       if (foundIndexAlive !== -1) prevValue = alivesnmpObjectIP[foundIndexAlive].lastValue;
       const newValue = snmpObject.value;
       function cleanVal(val) {
@@ -129,11 +128,12 @@ async function snmpGet(snmpObject, community = 'public') {
     const varbinds = await new Promise((resolve, reject) => {
       session.get({ oid: snmpObject.oid }, (error, varbinds) => {
         session.close()
+        const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19);
         if (error) {
           if (error.message && error.message.toLowerCase().includes('timeout')) {
-            console.error(`[ERROR] Timeout for SNMP get ${snmpObject.ip_address} ${snmpObject.oid}`)
+            console.error(`${formattedDate} [ERROR] Timeout for SNMP get ${snmpObject.ip_address} ${snmpObject.oid}`)
           } else {
-            console.error('Error:', error.message || error)
+            console.error(`${formattedDate} Error:`, error.message || error)
           }
           reject(error)
         } else {
@@ -147,10 +147,11 @@ async function snmpGet(snmpObject, community = 'public') {
       throw new Error('No response received')
     }
   } catch (error) {
+    const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19);
     if (error.message && error.message.toLowerCase().includes('timeout')) {
-      console.error(`[ERROR] Timeout for SNMP get ${snmpObject.ip_address} ${snmpObject.oid}`)
+      console.error(`${formattedDate} [ERROR] Timeout for SNMP get ${snmpObject.ip_address} ${snmpObject.oid}`)
     } else {
-      console.error('Error:', error.message || error)
+      console.error(`${formattedDate} Error:`, error.message || error)
     }
     throw error
   }
