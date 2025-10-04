@@ -49,14 +49,18 @@ async function netWatchStarter() {
   }
 
   if (process.env.SNMP_POOLING_ENABLE === 'true') {
-    setInterval(() => {
-      try {
-        snmpObjectsList.forEach(snmpObject => {
-          checksnmpObjectStatus(snmpObject)
-        })
-      } catch (err) {
-        console.log(err)
+    async function pollSnmpObjectsSequentially() {
+      for (const snmpObject of snmpObjectsList) {
+        try {
+          await checksnmpObjectStatus(snmpObject)
+        } catch (err) {
+          console.log(err);
+        }
+        await new Promise(res => setTimeout(res, 300))
       }
+    }
+    setInterval(() => {
+      pollSnmpObjectsSequentially()
     }, snmpPoolingInterval)
   }
 }

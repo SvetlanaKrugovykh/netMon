@@ -77,18 +77,27 @@ async function handleStatusChange(args) {
         .replace(/\s+/g, ' ')
         .trim()
     }
-    const prevValueStr = cleanVal(prevValue)
-    const newValueStr = cleanVal(newValue)
-    const prevNum = parseFloat(prevValueStr)
-    const newNum = parseFloat(newValueStr)
-    const bothNumbers = !isNaN(prevNum) && !isNaN(newNum)
+    const prevValueStr = cleanVal(prevValue);
+    const newValueStr = cleanVal(newValue);
+    const prevNum = parseFloat(prevValueStr);
+    const newNum = parseFloat(newValueStr);
+    const bothNumbers = !isNaN(prevNum) && !isNaN(newNum);
+    console.log('[DEBUG handleStatusChange] value/lastValue:', {
+      value: newValue,
+      lastValue: prevValue,
+      prevValueStr,
+      newValueStr,
+      prevNum,
+      newNum,
+      bothNumbers
+    })
     if (
       (bothNumbers && prevNum !== newNum) ||
       (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
     ) {
       if (!prevValueStr || !newValueStr) {
-        console.log('[DEBUG handleStatusChange] SKIP: one of values is empty after clean');
-        return;
+        console.log('[DEBUG handleStatusChange] SKIP: one of values is empty after clean')
+        return
       }
       console.log('[DEBUG handleStatusChange] SENDING: value changed, writing to DB and sending message');
       let resource = '';
