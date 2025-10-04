@@ -6,7 +6,7 @@ const { handleStatusChange } = require('../src/server/modules/watchHandler');
   const removeFromList = []
 
   const snmpObj = {
-    ip_address: "192.168.65.238",
+    ip_address: process.env.TEST_SNMP_IP,
     description: "Rx Power DDM Olimp10G-Kiev_26_UP",
     oid: ".1.3.6.1.4.1.171.12.72.2.1.1.1.6.26",
     status: "dead",
