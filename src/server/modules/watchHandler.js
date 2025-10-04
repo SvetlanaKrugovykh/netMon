@@ -58,6 +58,12 @@ async function handleStatusChange(args) {
       (bothNumbers && prevNum !== newNum) ||
       (!bothNumbers && prevValue !== undefined && newValue !== undefined && prevValue !== newValue)
     ) {
+      if (
+        (bothNumbers && (isNaN(prevNum) || isNaN(newNum))) ||
+        (!bothNumbers && (!prevValue || !newValue))
+      ) {
+        return
+      }
       // Value changed — write to DB and update lastValue
       let resource = ''
       if (service === true) {
