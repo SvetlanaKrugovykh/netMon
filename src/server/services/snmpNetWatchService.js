@@ -309,7 +309,10 @@ async function loadSnmpObjectsList() {
     // Add lastValue to each object for status tracking
     // Use lastValue from response if present, parse only the numeric part
     return parsedData.ResponseArray.map(obj => {
-      let rawLastValue = obj.lastValue !== undefined ? obj.lastValue : (obj.value !== undefined ? obj.value : '')
+      // Priority: use lastValue first, then value as fallback
+      let rawLastValue = obj.lastValue !== undefined && obj.lastValue !== null && obj.lastValue !== '' 
+        ? obj.lastValue 
+        : (obj.value !== undefined && obj.value !== null && obj.value !== '' ? obj.value : '')
       let parsedLastValue = ''
 
       console.log('[DEBUG][loadSnmpObjectsList] Processing object:', {
@@ -319,7 +322,11 @@ async function loadSnmpObjectsList() {
         rawLastValue,
         rawLastValueType: typeof rawLastValue,
         objValue: obj.value,
-        objLastValue: obj.lastValue
+        objLastValue: obj.lastValue,
+        selectedSource: obj.lastValue !== undefined && obj.lastValue !== null && obj.lastValue !== '' ? 'lastValue' : 'value',
+        objLastValueUndefined: obj.lastValue === undefined,
+        objLastValueNull: obj.lastValue === null,
+        objLastValueEmpty: obj.lastValue === ''
       })
 
       if (typeof rawLastValue === 'string') {
