@@ -128,41 +128,78 @@ async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
 
 async function snmpGet(snmpObject, community = 'public') {
   const timeoutSec = parseInt(process.env.SNMP_CLIENT_TIMEOUT_SEC) || 5
+  const maxAttempts = parseInt(process.env.SNMP_GET_RETRIES) || 2
+  const startOverall = Date.now()
+  let lastError = null
 
-  console.log('[SNMP][snmpGet] Enter snmpGet', { ip: snmpObject.ip_address, oid: snmpObject.oid, timeoutSec, community })
-  const session = new snmp.Session({ host: snmpObject.ip_address, community: community, timeout: timeoutSec * 1000 })
-
-  try {
-    const varbinds = await new Promise((resolve, reject) => {
-      session.get({ oid: snmpObject.oid }, (error, varbinds) => {
-        session.close()
-        const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19)
-        if (error) {
-          if (error.message && error.message.toLowerCase().includes('timeout')) {
-            console.error('[SNMP][snmpGet] Timeout', { ip: snmpObject.ip_address, oid: snmpObject.oid, timeoutSec })
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const attemptStart = Date.now()
+    console.log('[SNMP][snmpGet] Attempt', { attempt, maxAttempts, ip: snmpObject.ip_address, oid: snmpObject.oid, timeoutSec, community })
+    const session = new snmp.Session({ host: snmpObject.ip_address, community: community, timeout: timeoutSec * 1000 })
+    try {
+      const varbinds = await new Promise((resolve, reject) => {
+        session.get({ oid: snmpObject.oid }, (error, varbinds) => {
+          session.close()
+          const elapsedAttemptMs = Date.now() - attemptStart
+          if (error) {
+            if (error.message && error.message.toLowerCase().includes('timeout')) {
+              console.error('[SNMP][snmpGet] Timeout', {
+                ip: snmpObject.ip_address,
+                oid: snmpObject.oid,
+                timeoutSec,
+                attempt,
+                maxAttempts,
+                elapsedAttemptMs,
+                totalElapsedMs: Date.now() - startOverall,
+                startedAt: new Date(attemptStart).toISOString(),
+                finishedAt: new Date().toISOString(),
+                valueExpected: snmpObject.value,
+                minExpected: snmpObject.min,
+                maxExpected: snmpObject.max
+              })
+            } else {
+              console.error('[SNMP][snmpGet] Error', {
+                ip: snmpObject.ip_address,
+                oid: snmpObject.oid,
+                error: error.message || error,
+                attempt,
+                elapsedAttemptMs
+              })
+            }
+            reject(error)
           } else {
-            console.error('[SNMP][snmpGet] Error', { ip: snmpObject.ip_address, oid: snmpObject.oid, error: error.message || error })
+            resolve(varbinds)
           }
-          reject(error)
-        } else {
-          resolve(varbinds)
-        }
+        })
       })
-    })
-    if (varbinds.length > 0) {
-      return snmpAnswersAnalizer(snmpObject, varbinds)
-    } else {
-      throw new Error('No response received')
+      if (varbinds.length > 0) {
+        const parsed = snmpAnswersAnalizer(snmpObject, varbinds)
+        const totalElapsedMs = Date.now() - startOverall
+        console.log('[SNMP][snmpGet] Success', { ip: snmpObject.ip_address, oid: snmpObject.oid, attempt, totalElapsedMs, result: parsed })
+        return parsed
+      } else {
+        throw new Error('No response received')
+      }
+    } catch (error) {
+      lastError = error
+      // If timeout and not last attempt -> small delay before retry to mitigate ARP/cache issues
+      if (attempt < maxAttempts && error.message && error.message.toLowerCase().includes('timeout')) {
+        const backoffMs = 200
+        await new Promise(r => setTimeout(r, backoffMs))
+        continue
+      }
+      const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      if (error.message && error.message.toLowerCase().includes('timeout')) {
+        console.error(`${formattedDate} [ERROR] Timeout for SNMP get ${snmpObject.ip_address} ${snmpObject.oid} (attempts=${attempt}/${maxAttempts}) totalElapsedMs=${Date.now() - startOverall}`)
+      } else {
+        console.error(`${formattedDate} Error:`, error.message || error)
+      }
+      if (attempt === maxAttempts) {
+        throw error
+      }
     }
-  } catch (error) {
-    const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19)
-    if (error.message && error.message.toLowerCase().includes('timeout')) {
-      console.error(`${formattedDate} [ERROR] Timeout for SNMP get ${snmpObject.ip_address} ${snmpObject.oid}`)
-    } else {
-      console.error(`${formattedDate} Error:`, error.message || error)
-    }
-    throw error
   }
+  throw lastError || new Error('Unknown SNMP get error')
 }
 
 function snmpAnswersAnalizer(snmpObject, varbinds) {

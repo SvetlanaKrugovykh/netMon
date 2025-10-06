@@ -83,33 +83,54 @@ async function runCommand(command, args = [], value = '') {
           }
           let response
           try {
-            let lastError = null
+            const axiosTimeoutMs = parseInt(process.env.SNMP_CLIENT_TIMEOUT_SEC) * 1000 || 10000
+            const localAddr = process.env.SNMP_SOURCE_IP || undefined
+            const startedAll = Date.now()
+            let lastErr = null
             for (let attempt = 1; attempt <= 2; attempt++) {
+              const attemptStart = Date.now()
               try {
                 response = await axios.post(
                   remote.url,
                   postData,
                   {
                     headers: postHeaders,
-                    timeout: parseInt(process.env.SNMP_CLIENT_TIMEOUT_SEC) * 1000 || 10000,
-                    localAddress: process.env.SNMP_SOURCE_IP
+                    timeout: axiosTimeoutMs,
+                    localAddress: localAddr
                   }
                 )
+                const elapsedMs = Date.now() - attemptStart
+                if (SNMP_DEBUG_LEVEL > 1) {
+                  debugLog += `[REMOTE] AXIOS SUCCESS attempt=${attempt} elapsedMs=${elapsedMs}\n`
+                }
                 break
               } catch (err) {
-                lastError = err;
-                logWithTime(`[ERROR] SNMP remote axios attempt ${attempt} failed`, err.message || err);
-                if (attempt === 2) throw err;
+                lastErr = err
+                const isTimeout = err.code === 'ECONNABORTED' || (err.message && err.message.toLowerCase().includes('timeout'))
+                const elapsedMs = Date.now() - attemptStart
+                logWithTime(`[ERROR] REMOTE axios attempt ${attempt} ${isTimeout ? 'TIMEOUT' : 'FAIL'}`, {
+                  url: remote.url,
+                  ip: targetIp,
+                  oid: args && args.length > 0 ? args[args.length - 1] : undefined,
+                  expectedValue: value === undefined ? '' : value,
+                  axiosTimeoutMs,
+                  localAddress: localAddr,
+                  elapsedMs,
+                  totalElapsedMs: Date.now() - startedAll,
+                  error: err.message || err
+                })
+                if (attempt === 2) {
+                  throw err
+                }
               }
             }
-          } catch (err) {
-            if (err.code === 'ECONNABORTED' || (err.message && err.message.toLowerCase().includes('timeout'))) {
-              logWithTime('[ERROR] SNMP remote axios timeout', { url: remote.url, ip: targetIp, oid: args && args.length > 0 ? args[args.length - 1] : undefined })
-            } else {
-              logWithTime('[ERROR] SNMP remote axios', err.message || err)
+            if (!response) {
+              return null
             }
+          } catch (err) {
+
             if (SNMP_DEBUG_LEVEL > 1) {
-              debugLog += `[REMOTE] AXIOS ERROR: ${err.message}\n`
+              debugLog += `[REMOTE] AXIOS FINAL ERROR: ${err.message}\n`
               logWithTime(`[DEBUG]\n${debugLog}`)
             }
             return null
