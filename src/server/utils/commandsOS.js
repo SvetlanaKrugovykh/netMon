@@ -200,7 +200,6 @@ async function runCommand(command, args = [], value = '') {
           }
           const evalResult = (() => {
             if (!value) {
-              PROBLEM
               return 'Status OK'
             }
             const operStatusMap = {
