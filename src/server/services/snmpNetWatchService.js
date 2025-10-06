@@ -46,7 +46,23 @@ async function handleSnmpObjectDeadStatus(snmpObject, response, cycleId) {
       await handleStatusChange({ ip_address: snmpObject, removeFromList: alivesnmpObjectIP, addToList: deadsnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.DEAD, service: true, response, cycleId })
     } else {
       let prevValue = ''
-      if (foundIndexDead !== -1) prevValue = deadsnmpObjectIP[foundIndexDead].lastValue
+      if (foundIndexDead !== -1) {
+        prevValue = deadsnmpObjectIP[foundIndexDead].lastValue
+      } else {
+        // If not found in deadsnmpObjectIP, use lastValue from snmpObject (from DB)
+        prevValue = snmpObject.lastValue || ''
+      }
+      
+      if (snmpObject.oid === '1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
+        console.log('[DEBUG][CONTROL_OID] prevValue source:', {
+          oid: snmpObject.oid,
+          foundIndexDead,
+          snmpObjectLastValue: snmpObject.lastValue,
+          deadListLastValue: foundIndexDead !== -1 ? deadsnmpObjectIP[foundIndexDead].lastValue : 'N/A',
+          finalPrevValue: prevValue
+        })
+      }
+      
       const newValue = response
       function cleanVal(val) {
         return (val ?? '').toString()
@@ -85,6 +101,7 @@ async function handleSnmpObjectDeadStatus(snmpObject, response, cycleId) {
           status: 'dead',
           timestamp: new Date().toISOString()
         }), '')
+        snmpObject.lastValue = newValueStr
         await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: deadsnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.DEAD, service: true, response, cycleId })
       }
       if (foundIndexDead === -1) {
@@ -138,6 +155,8 @@ async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
           status: 'alive',
           timestamp: new Date().toISOString()
         }), '')
+        // Update lastValue in snmpObject for next cycle
+        snmpObject.lastValue = newValueStr
         await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: alivesnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.ALIVE, service: true, response, cycleId })
       }
       if (foundIndexAlive === -1) {
@@ -286,6 +305,17 @@ async function loadSnmpObjectsList() {
     return parsedData.ResponseArray.map(obj => {
       let rawLastValue = obj.lastValue !== undefined ? obj.lastValue : (obj.value !== undefined ? obj.value : '')
       let parsedLastValue = ''
+      
+      if (obj.oid === '1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
+        console.log('[DEBUG][loadSnmpObjectsList] CONTROL OID - RAW DATA:', {
+          oid: obj.oid,
+          rawLastValue,
+          rawLastValueType: typeof rawLastValue,
+          objValue: obj.value,
+          objLastValue: obj.lastValue
+        })
+      }
+      
       if (typeof rawLastValue === 'string') {
         // Remove 'value', 'Status OK', 'Status PROBLEM', and extra spaces
         parsedLastValue = rawLastValue
@@ -294,15 +324,21 @@ async function loadSnmpObjectsList() {
           .replace(/Status PROBLEM/gi, '')
           .replace(/\s+/g, ' ')
           .trim()
-        // Try to extract the number if present
-        const match = parsedLastValue.match(/-?\d+(\.\d+)?/)
-        parsedLastValue = match ? match[0] : ''
+        // Try to extract the number if present - improved regex for decimal numbers
+        const match = parsedLastValue.match(/-?\d+(?:\.\d+)?/)
+        parsedLastValue = match ? match[0] : parsedLastValue
       } else if (typeof rawLastValue === 'number') {
         parsedLastValue = rawLastValue.toString()
       }
+      
       if (obj.oid === '1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
-        console.log('[DEBUG][loadSnmpObjectsList] CONTROL OID:', obj.oid, 'Value:', obj.value, 'lastValue:', parsedLastValue)
+        console.log('[DEBUG][loadSnmpObjectsList] CONTROL OID - PROCESSED:', {
+          oid: obj.oid,
+          parsedLastValue,
+          finalValue: obj.value
+        })
       }
+      
       return {
         ...obj,
         lastValue: parsedLastValue
