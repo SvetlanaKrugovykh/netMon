@@ -47,7 +47,7 @@ async function handleSnmpObjectDeadStatus(snmpObject, response, cycleId) {
     } else {
       let prevValue = ''
       if (foundIndexDead !== -1) prevValue = deadsnmpObjectIP[foundIndexDead].lastValue
-      const newValue = snmpObject.value
+      const newValue = response
       function cleanVal(val) {
         return (val ?? '').toString()
           .replace(/value/gi, '')
@@ -88,10 +88,10 @@ async function handleSnmpObjectDeadStatus(snmpObject, response, cycleId) {
         await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: deadsnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.DEAD, service: true, response, cycleId })
       }
       if (foundIndexDead === -1) {
-        deadsnmpObjectIP.push({ ip_address: snmpObject.ip_address, oid: snmpObject.oid, count: 1, lastValue: snmpObject.value })
+        deadsnmpObjectIP.push({ ip_address: snmpObject.ip_address, oid: snmpObject.oid, count: 1, lastValue: newValueStr })
       } else {
         deadsnmpObjectIP[foundIndexDead].count++
-        deadsnmpObjectIP[foundIndexDead].lastValue = snmpObject.value
+        deadsnmpObjectIP[foundIndexDead].lastValue = newValueStr
       }
       snmpObject.status = Status.DEAD
     }
@@ -114,7 +114,7 @@ async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
     } else {
       let prevValue = ''
       if (foundIndexAlive !== -1) prevValue = alivesnmpObjectIP[foundIndexAlive].lastValue
-      const newValue = snmpObject.value
+      const newValue = response
       function cleanVal(val) {
         return (val ?? '').toString()
           .replace(/value/gi, '')
@@ -131,7 +131,6 @@ async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
       const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
       if (valueChanged) {
         console.log('[SNMP] handleStatusChange ALIVE->ALIVE valueChanged', { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
-        // Явно пишем новое значение в базу
         await sendReqToDB('__UpdateSnmpObjectValue__', JSON.stringify({
           ip_address: snmpObject.ip_address,
           oid: snmpObject.oid,
@@ -142,10 +141,10 @@ async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
         await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: alivesnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.ALIVE, service: true, response, cycleId })
       }
       if (foundIndexAlive === -1) {
-        alivesnmpObjectIP.push({ ip_address: snmpObject.ip_address, oid: snmpObject.oid, count: 1, lastValue: snmpObject.value })
+        alivesnmpObjectIP.push({ ip_address: snmpObject.ip_address, oid: snmpObject.oid, count: 1, lastValue: newValueStr })
       } else {
         alivesnmpObjectIP[foundIndexAlive].count++
-        alivesnmpObjectIP[foundIndexAlive].lastValue = snmpObject.value
+        alivesnmpObjectIP[foundIndexAlive].lastValue = newValueStr
       }
       snmpObject.status = Status.ALIVE
     }
