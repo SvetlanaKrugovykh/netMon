@@ -52,7 +52,7 @@ async function handleSnmpObjectDeadStatus(snmpObject, response, cycleId) {
         // If not found in deadsnmpObjectIP, use lastValue from snmpObject (from DB)
         prevValue = snmpObject.lastValue || ''
       }
-      
+
       if (snmpObject.oid === '1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
         console.log('[DEBUG][CONTROL_OID] prevValue source:', {
           oid: snmpObject.oid,
@@ -62,7 +62,7 @@ async function handleSnmpObjectDeadStatus(snmpObject, response, cycleId) {
           finalPrevValue: prevValue
         })
       }
-      
+
       const newValue = response
       function cleanVal(val) {
         return (val ?? '').toString()
@@ -305,7 +305,7 @@ async function loadSnmpObjectsList() {
     return parsedData.ResponseArray.map(obj => {
       let rawLastValue = obj.lastValue !== undefined ? obj.lastValue : (obj.value !== undefined ? obj.value : '')
       let parsedLastValue = ''
-      
+
       if (obj.oid === '1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
         console.log('[DEBUG][loadSnmpObjectsList] CONTROL OID - RAW DATA:', {
           oid: obj.oid,
@@ -315,7 +315,7 @@ async function loadSnmpObjectsList() {
           objLastValue: obj.lastValue
         })
       }
-      
+
       if (typeof rawLastValue === 'string') {
         // Remove 'value', 'Status OK', 'Status PROBLEM', and extra spaces
         parsedLastValue = rawLastValue
@@ -330,7 +330,7 @@ async function loadSnmpObjectsList() {
       } else if (typeof rawLastValue === 'number') {
         parsedLastValue = rawLastValue.toString()
       }
-      
+
       if (obj.oid === '1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
         console.log('[DEBUG][loadSnmpObjectsList] CONTROL OID - PROCESSED:', {
           oid: obj.oid,
@@ -338,7 +338,7 @@ async function loadSnmpObjectsList() {
           finalValue: obj.value
         })
       }
-      
+
       return {
         ...obj,
         lastValue: parsedLastValue
