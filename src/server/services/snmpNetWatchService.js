@@ -22,8 +22,14 @@ async function checksnmpObjectStatus(snmpObject, cycleId) {
       response = await runCommand('snmpwalk', ['-v', '2c', '-c', 'public', '-OXsq', '-On', snmpObject.ip_address, snmpObject.oid], snmpObject.value)
     }
     if (response && typeof response === 'string' && response.includes('Status OK')) {
+      if (snmpObject.oid === '.1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
+        console.log('[DEBUG][CONTROL_OID] Going to handleSnmpObjectAliveStatus - Status OK detected')
+      }
       handleSnmpObjectAliveStatus(snmpObject, response, cycleId)
     } else {
+      if (snmpObject.oid === '.1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
+        console.log('[DEBUG][CONTROL_OID] Going to handleSnmpObjectDeadStatus - Status PROBLEM detected', { response })
+      }
       console.log(`[SNMP] DEAD`, { cycleId, ip: snmpObject.ip_address, desc: snmpObject.description, response, oid: snmpObject.oid })
       handleSnmpObjectDeadStatus(snmpObject, response, cycleId)
     }
