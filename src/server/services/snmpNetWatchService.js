@@ -128,6 +128,8 @@ async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
 
 async function snmpGet(snmpObject, community = 'public') {
   const timeoutSec = parseInt(process.env.SNMP_CLIENT_TIMEOUT_SEC) || 5
+
+  console.log('[SNMP][snmpGet] Enter snmpGet', { ip: snmpObject.ip_address, oid: snmpObject.oid, timeoutSec, community })
   const session = new snmp.Session({ host: snmpObject.ip_address, community: community, timeout: timeoutSec * 1000 })
 
   try {
@@ -137,9 +139,9 @@ async function snmpGet(snmpObject, community = 'public') {
         const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19)
         if (error) {
           if (error.message && error.message.toLowerCase().includes('timeout')) {
-            console.error(`${formattedDate} [ERROR] Timeout for SNMP get ${snmpObject.ip_address} ${snmpObject.oid}`)
+            console.error('[SNMP][snmpGet] Timeout', { ip: snmpObject.ip_address, oid: snmpObject.oid, timeoutSec })
           } else {
-            console.error(`${formattedDate} Error:`, error.message || error)
+            console.error('[SNMP][snmpGet] Error', { ip: snmpObject.ip_address, oid: snmpObject.oid, error: error.message || error })
           }
           reject(error)
         } else {
