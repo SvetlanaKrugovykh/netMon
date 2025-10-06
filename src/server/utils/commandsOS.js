@@ -43,7 +43,7 @@ async function runCommand(command, args = [], value = '') {
   let snmpTimeoutSec = parseInt(process.env.SNMP_CLIENT_TIMEOUT_SEC) || 5
   if ((command.includes('snmpwalk') || command.includes('snmpget')) && args.length > 0) {
     const oidArgs = args.filter(a => /^\.?\d+(\.\d+)+$/.test(a))
-    if (oidArgs.length === 1) {
+    if (oidArgs.length === 1 && value && value.length > 0) {
       isSnmpSingleOid = true
     }
     targetIp = args.find(a => /^\d+\.\d+\.\d+\.\d+$/.test(a))
@@ -94,7 +94,7 @@ async function runCommand(command, args = [], value = '') {
           let useSnmpget = false
           let remoteTimeout = snmpTimeoutSec;
           const oidArgs = args.filter(a => /^\.?\d+(\.\d+)+$/.test(a))
-          if (oidArgs.length === 1) {
+          if (oidArgs.length === 1 && value && value.length > 0) {
             remoteCommand = 'snmpget'
             useSnmpget = true
             remoteArgs = args.filter(a => a !== '-OXsq')
