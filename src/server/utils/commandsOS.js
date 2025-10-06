@@ -165,19 +165,38 @@ async function runCommand(command, args = [], value = '') {
             }
             return result
           }
-          if (stdout.includes(value)) {
-            if (SNMP_DEBUG_LEVEL > 1) {
-              debugLog += `[RETURN] Status OK\n`
-              logWithTime(`[DEBUG]\n${debugLog}`)
+          const evalResult = (() => {
+            if (!value) {
+              PROBLEM
+              return 'Status OK'
             }
-            return 'Status OK'
-          } else {
-            if (SNMP_DEBUG_LEVEL > 1) {
-              debugLog += `[RETURN] Status PROBLEM\n`
-              logWithTime(`[DEBUG]\n${debugLog}`)
+            const operStatusMap = {
+              up: '1',
+              down: '2',
+              testing: '3',
+              unknown: '4',
+              dormant: '5',
+              notPresent: '6',
+              lowerLayerDown: '7'
             }
-            return 'Status PROBLEM'
+            const tokens = stdout.trim().split(/\s+/)
+            const lastToken = tokens[tokens.length - 1] || ''
+            let normalized = lastToken
+            if (operStatusMap[normalized] !== undefined) {
+              normalized = operStatusMap[normalized]
+            }
+            const expectedNumeric = /^\d+$/.test(value)
+            const normalizedNumeric = /^\d+$/.test(normalized)
+            if (expectedNumeric && normalizedNumeric) {
+              return normalized === value ? 'Status OK' : `Status PROBLEM (got=${normalized} expected=${value})`
+            }
+            return stdout.includes(value) ? 'Status OK' : 'Status PROBLEM'
+          })()
+          if (SNMP_DEBUG_LEVEL > 1) {
+            debugLog += `[RETURN] ${evalResult}\n`
+            logWithTime(`[DEBUG]\n${debugLog}`)
           }
+          return evalResult
           if (SNMP_DEBUG_LEVEL > 1) {
             debugLog += `[RETURN] { stdout, stderr }\n`
             logWithTime(`[DEBUG]\n${debugLog}`)
@@ -238,19 +257,31 @@ async function runCommand(command, args = [], value = '') {
       }
       return result
     }
-    if (stdout.includes(value)) {
+    if (!value) {
       if (SNMP_DEBUG_LEVEL > 1) {
-        debugLog += `[RETURN] Status OK\n`
+        debugLog += `[RETURN] Status OK (no expected value)\n`
         logWithTime(`[DEBUG]\n${debugLog}`)
       }
       return 'Status OK'
-    } else {
-      if (SNMP_DEBUG_LEVEL > 1) {
-        debugLog += `[RETURN] Status PROBLEM\n`
-        logWithTime(`[DEBUG]\n${debugLog}`)
-      }
-      return 'Status PROBLEM'
     }
+    const operStatusMap = { up: '1', down: '2', testing: '3', unknown: '4', dormant: '5', notPresent: '6', lowerLayerDown: '7' }
+    const tokens = stdout.trim().split(/\s+/)
+    const lastToken = tokens[tokens.length - 1] || ''
+    let normalized = lastToken
+    if (operStatusMap[normalized] !== undefined) normalized = operStatusMap[normalized]
+    const expectedNumeric = /^\d+$/.test(value)
+    const normalizedNumeric = /^\d+$/.test(normalized)
+    let finalStatus
+    if (expectedNumeric && normalizedNumeric) {
+      finalStatus = (normalized === value) ? 'Status OK' : `Status PROBLEM (got=${normalized} expected=${value})`
+    } else {
+      finalStatus = stdout.includes(value) ? 'Status OK' : 'Status PROBLEM'
+    }
+    if (SNMP_DEBUG_LEVEL > 1) {
+      debugLog += `[RETURN] ${finalStatus}\n`
+      logWithTime(`[DEBUG]\n${debugLog}`)
+    }
+    return finalStatus
     if (SNMP_DEBUG_LEVEL > 1) {
       debugLog += `[RETURN] { stdout, stderr }\n`
       logWithTime(`[DEBUG]\n${debugLog}`)
