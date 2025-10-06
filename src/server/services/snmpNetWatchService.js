@@ -136,7 +136,7 @@ async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
         // If not found in alivesnmpObjectIP, use lastValue from snmpObject (from DB)
         prevValue = snmpObject.lastValue || ''
       }
-      
+
       if (snmpObject.oid === '.1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
         console.log('[DEBUG][CONTROL_OID] ALIVE prevValue source:', {
           oid: snmpObject.oid,
@@ -146,7 +146,7 @@ async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
           finalPrevValue: prevValue
         })
       }
-      
+
       const newValue = response
       function cleanVal(val) {
         return (val ?? '').toString()
@@ -162,7 +162,7 @@ async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
       const newNum = parseFloat(newValueStr)
       const bothNumbers = !isNaN(prevNum) && !isNaN(newNum)
       const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
-      
+
       if (snmpObject.oid === '.1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
         console.log('[DEBUG][CONTROL_OID] ALIVE Before sendReqToDB check:', {
           oid: snmpObject.oid,
@@ -174,7 +174,7 @@ async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
           bothNumbers
         })
       }
-      
+
       if (valueChanged) {
         console.log('[SNMP] handleStatusChange ALIVE->ALIVE valueChanged', { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
         if (snmpObject.oid === '.1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
