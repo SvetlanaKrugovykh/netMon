@@ -212,7 +212,6 @@ async function snmpGet(snmpObject, community = 'public') {
     try {
       const varbinds = await new Promise((resolve, reject) => {
         session.get({ oid: snmpObject.oid }, (error, varbinds) => {
-          session.close()
           const elapsedAttemptMs = Date.now() - attemptStart
           if (error) {
             if (error.message && error.message.toLowerCase().includes('timeout')) {
@@ -280,6 +279,13 @@ async function snmpGet(snmpObject, community = 'public') {
       }
       if (attempt === maxAttempts) {
         throw error
+      }
+    } finally {
+      // Always close session to prevent session leaks
+      try {
+        session.close()
+      } catch (closeError) {
+        console.error('[SNMP][snmpGet] Error closing session:', closeError.message || closeError)
       }
     }
   }
