@@ -134,7 +134,7 @@ async function snmpGet(snmpObject, community = 'public') {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const attemptStart = Date.now()
-  console.log('[SNMP][snmpGet] Attempt', { attempt, maxAttempts, ip: snmpObject.ip_address, oid: snmpObject.oid, timeoutSec, community, expectedValue: snmpObject.value, lastValue: snmpObject.lastValue, min: snmpObject.min, max: snmpObject.max })
+    console.log('[SNMP][snmpGet] Attempt', { attempt, maxAttempts, ip: snmpObject.ip_address, oid: snmpObject.oid, timeoutSec, community, expectedValue: snmpObject.value, lastValue: snmpObject.lastValue, min: snmpObject.min, max: snmpObject.max })
     const session = new snmp.Session({ host: snmpObject.ip_address, community: community, timeout: timeoutSec * 1000 })
     try {
       const varbinds = await new Promise((resolve, reject) => {
@@ -194,13 +194,13 @@ async function snmpGet(snmpObject, community = 'public') {
         console.error(`${formattedDate} [ERROR] Timeout for SNMP get ${snmpObject.ip_address} ${snmpObject.oid} (attempts=${attempt}/${maxAttempts}) totalElapsedMs=${Date.now() - startOverall}`)
         console.error('[SNMP][snmpGet] TimeoutDetails', {
           ip: snmpObject.ip_address,
-            oid: snmpObject.oid,
-            expectedValue: snmpObject.value,
-            lastValue: snmpObject.lastValue,
-            min: snmpObject.min,
-            max: snmpObject.max,
-            timeoutSec,
-            attempts: `${attempt}/${maxAttempts}`
+          oid: snmpObject.oid,
+          expectedValue: snmpObject.value,
+          lastValue: snmpObject.lastValue,
+          min: snmpObject.min,
+          max: snmpObject.max,
+          timeoutSec,
+          attempts: `${attempt}/${maxAttempts}`
         })
       } else {
         console.error(`${formattedDate} Error:`, error.message || error)
