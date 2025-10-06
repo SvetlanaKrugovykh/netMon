@@ -81,7 +81,21 @@ async function runCommand(command, args = [], value = '') {
             Authorization: process.env.SNMP_TOKEN,
             'Content-Type': 'application/json'
           }
-          const response = await axios.post(remote.url, postData, { headers: postHeaders })
+          let response
+          try {
+            response = await axios.post(remote.url, postData, { headers: postHeaders, timeout: parseInt(process.env.SNMP_CLIENT_TIMEOUT_SEC) * 1000 || 10000 })
+          } catch (err) {
+            if (err.code === 'ECONNABORTED' || (err.message && err.message.toLowerCase().includes('timeout'))) {
+              logWithTime('[ERROR] SNMP remote axios timeout', { url: remote.url, ip: targetIp, oid: args && args.length > 0 ? args[args.length - 1] : undefined })
+            } else {
+              logWithTime('[ERROR] SNMP remote axios', err.message || err)
+            }
+            if (SNMP_DEBUG_LEVEL > 1) {
+              debugLog += `[REMOTE] AXIOS ERROR: ${err.message}\n`
+              logWithTime(`[DEBUG]\n${debugLog}`)
+            }
+            return null
+          }
           const stdout = response.data.result || ''
           const stderr = response.data.stderr || ''
           if (SNMP_DEBUG_LEVEL > 1) {
