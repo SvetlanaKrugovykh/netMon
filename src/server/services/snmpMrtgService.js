@@ -33,12 +33,23 @@ async function loadSnmpMrtgObjectData(snmpMrtgObjectsList) {
         const cmdArgs = ['-v', '2c', '-c', 'public', '-Oqv', '-On', snmpObject.ip_address, oid]
         response = await runCommand('snmpget', cmdArgs)
         response = (typeof response === 'string') ? response.replace(/\s+/g, ' ').trim() : ''
-        const match = response.match(/^(\d+)$/)
-        if (!match) {
-          console.log(`Invalid SNMP value received: ${response} (OID: ${snmpObject.oid})`)
-          continue
+        
+        // Extract numeric value from SNMP response (e.g., "value 12345 Status OK" -> 12345)
+        let cleanValue = response
+        if (typeof response === 'string') {
+          // Remove "value", "Status OK", "Status PROBLEM" and extract number
+          cleanValue = response.replace(/value/gi, '').replace(/Status OK/gi, '').replace(/Status PROBLEM/gi, '').trim()
+          const match = cleanValue.match(/-?\d+(\.\d+)?/)
+          if (match) {
+            cleanValue = match[0]
+          } else {
+            // No numeric value found in string like "Status OK" - skip this record
+            if (process.env.MRTG_DEBUG === '9') console.log(`Skipping non-numeric SNMP value: ${response} (OID: ${snmpObject.oid})`)
+            continue
+          }
         }
-        const snmpValue = match[1]
+        
+        const snmpValue = cleanValue
 
         const snmpData = {
           ip_address: snmpObject.ip_address,
