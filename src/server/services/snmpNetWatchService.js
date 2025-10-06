@@ -306,15 +306,15 @@ async function loadSnmpObjectsList() {
       let rawLastValue = obj.lastValue !== undefined ? obj.lastValue : (obj.value !== undefined ? obj.value : '')
       let parsedLastValue = ''
 
-      if (obj.oid === '1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
-        console.log('[DEBUG][loadSnmpObjectsList] CONTROL OID - RAW DATA:', {
-          oid: obj.oid,
-          rawLastValue,
-          rawLastValueType: typeof rawLastValue,
-          objValue: obj.value,
-          objLastValue: obj.lastValue
-        })
-      }
+      console.log('[DEBUG][loadSnmpObjectsList] Processing object:', {
+        oid: obj.oid,
+        ip: obj.ip_address,
+        description: obj.description,
+        rawLastValue,
+        rawLastValueType: typeof rawLastValue,
+        objValue: obj.value,
+        objLastValue: obj.lastValue
+      })
 
       if (typeof rawLastValue === 'string') {
         // Remove 'value', 'Status OK', 'Status PROBLEM', and extra spaces
@@ -331,13 +331,12 @@ async function loadSnmpObjectsList() {
         parsedLastValue = rawLastValue.toString()
       }
 
-      if (obj.oid === '1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
-        console.log('[DEBUG][loadSnmpObjectsList] CONTROL OID - PROCESSED:', {
-          oid: obj.oid,
-          parsedLastValue,
-          finalValue: obj.value
-        })
-      }
+      console.log('[DEBUG][loadSnmpObjectsList] Processed result:', {
+        oid: obj.oid,
+        ip: obj.ip_address,
+        parsedLastValue,
+        finalValue: obj.value
+      })
 
       return {
         ...obj,
