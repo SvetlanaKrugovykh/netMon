@@ -20,9 +20,20 @@ module.exports.mrtgToDB = async function (data) {
       if (process.env.MRTG_DEBUG === '9') console.log('MRTG data for DB:', ip)
       const { ip_address, oid, value, port } = ip
 
-      const parsedValue = Number(value)
+      // Extract numeric value from SNMP response (e.g., "value 12345 Status OK" -> 12345)
+      let cleanValue = value
+      if (typeof value === 'string') {
+        // Remove "value", "Status OK", "Status PROBLEM" and extract number
+        cleanValue = value.replace(/value/gi, '').replace(/Status OK/gi, '').replace(/Status PROBLEM/gi, '').trim()
+        const match = cleanValue.match(/-?\d+(\.\d+)?/)
+        if (match) {
+          cleanValue = match[0]
+        }
+      }
+
+      const parsedValue = Number(cleanValue)
       if (isNaN(parsedValue)) {
-        console.log(`Invalid SNMP value received: ${value} (OID: ${oid})`)
+        console.log(`Invalid SNMP value received: ${value} (OID: ${oid}) - could not extract number`)
         continue
       }
 
