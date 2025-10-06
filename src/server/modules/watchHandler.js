@@ -82,15 +82,7 @@ async function handleStatusChange(args) {
     const prevNum = parseFloat(prevValueStr);
     const newNum = parseFloat(newValueStr);
     const bothNumbers = !isNaN(prevNum) && !isNaN(newNum);
-    console.log('[DEBUG handleStatusChange] value/lastValue:', {
-      value: newValue,
-      lastValue: prevValue,
-      prevValueStr,
-      newValueStr,
-      prevNum,
-      newNum,
-      bothNumbers
-    })
+
     if (
       (bothNumbers && prevNum !== newNum) ||
       (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
