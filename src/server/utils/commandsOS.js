@@ -41,7 +41,7 @@ async function runCommand(command, args = [], value = '') {
   }
   let isSnmpSingleOid = false
   let snmpTimeoutSec = parseInt(process.env.SNMP_CLIENT_TIMEOUT_SEC) || 5
-  if (command.includes('snmpwalk') && args.length > 0) {
+  if ((command.includes('snmpwalk') || command.includes('snmpget')) && args.length > 0) {
     const oidArgs = args.filter(a => /^\.?\d+(\.\d+)+$/.test(a))
     if (oidArgs.length === 1) {
       isSnmpSingleOid = true
@@ -72,12 +72,19 @@ async function runCommand(command, args = [], value = '') {
         localArgs.unshift('-t')
       }
       fullCommand = 'snmpget' + ` ${localArgs.join(' ')}`
+    } else if (command.includes('snmpget')) {
+      let localArgs = [...args]
+      if (!localArgs.includes('-t')) {
+        localArgs.unshift((snmpTimeoutSec).toString())
+        localArgs.unshift('-t')
+      }
+      fullCommand += ` ${localArgs.join(' ')}`
     } else {
       fullCommand += ` ${args.join(' ')}`
     }
   }
 
-  if (command.includes('snmpwalk') && args.length > 0 && needRemoteCheck) {
+  if ((command.includes('snmpwalk') || command.includes('snmpget')) && args.length > 0 && needRemoteCheck) {
     if (targetIp) {
       const remote = snmpRemotes.find(r => targetIp.startsWith(r.subnet))
       if (remote && process.env.SNMP_TOKEN) {
