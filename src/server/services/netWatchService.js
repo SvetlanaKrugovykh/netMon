@@ -65,12 +65,7 @@ async function netWatchStarter() {
           okCount++
         } catch (err) {
           failCount++
-          // Логирование ошибок и таймаутов теперь только в snmpGet
-        }
-        // Не дублируем лог Object not processed
-        // if (!processed) {
-        //   console.log(`[SNMP][pollSnmpObjectsSequentially] Object not processed (error or timeout)`, { cycleId: snmpCycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
-        // }
+    }
         await new Promise(res => setTimeout(res, 3000))
       }
       console.log(`[SNMP][pollSnmpObjectsSequentially] Poll cycle summary`, { cycleId: snmpCycleId, ok: okCount, fail: failCount, total: snmpObjectsList.length })
