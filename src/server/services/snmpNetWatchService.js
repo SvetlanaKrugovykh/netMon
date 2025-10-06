@@ -310,8 +310,8 @@ async function loadSnmpObjectsList() {
     // Use lastValue from response if present, parse only the numeric part
     return parsedData.ResponseArray.map(obj => {
       // Priority: use lastValue first, then value as fallback
-      let rawLastValue = obj.lastValue !== undefined && obj.lastValue !== null && obj.lastValue !== '' 
-        ? obj.lastValue 
+      let rawLastValue = obj.lastValue !== undefined && obj.lastValue !== null && obj.lastValue !== ''
+        ? obj.lastValue
         : (obj.value !== undefined && obj.value !== null && obj.value !== '' ? obj.value : '')
       let parsedLastValue = ''
 
