@@ -64,6 +64,13 @@ async function handleSnmpObjectDeadStatus(snmpObject, response, cycleId) {
       const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
       if (valueChanged) {
         console.log('[SNMP] handleStatusChange DEAD->DEAD valueChanged', { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
+        await sendReqToDB('__UpdateSnmpObjectValue__', JSON.stringify({
+          ip_address: snmpObject.ip_address,
+          oid: snmpObject.oid,
+          value: newValueStr,
+          status: 'dead',
+          timestamp: new Date().toISOString()
+        }), '')
         await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: deadsnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.DEAD, service: true, response, cycleId })
       }
       if (foundIndexDead === -1) {
@@ -110,6 +117,14 @@ async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
       const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
       if (valueChanged) {
         console.log('[SNMP] handleStatusChange ALIVE->ALIVE valueChanged', { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
+        // Явно пишем новое значение в базу
+        await sendReqToDB('__UpdateSnmpObjectValue__', JSON.stringify({
+          ip_address: snmpObject.ip_address,
+          oid: snmpObject.oid,
+          value: newValueStr,
+          status: 'alive',
+          timestamp: new Date().toISOString()
+        }), '')
         await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: alivesnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.ALIVE, service: true, response, cycleId })
       }
       if (foundIndexAlive === -1) {
