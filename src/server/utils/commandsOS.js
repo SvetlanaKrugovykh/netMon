@@ -144,7 +144,16 @@ async function runCommand(command, args = [], value = '') {
             logWithTime(`${command} out: ${stdout}`)
           }
           if (stderr && stderr.toLowerCase().includes('timeout')) {
-            logWithTime(`[ERROR] Timeout for ${command}`)
+            logWithTime(`[ERROR] Timeout for ${command}`, {
+              phase: 'remote-stdout-stderr',
+              fullCommand: remoteCommand,
+              args,
+              ip: targetIp,
+              oid: args && args.length > 0 ? args[args.length - 1] : undefined,
+              expectedValue: value === undefined ? '' : value,
+              localAddress: process.env.SNMP_SOURCE_IP,
+              stderrFirstLine: stderr.split('\n')[0]
+            })
           } else if (stderr) {
             logWithTime(`[ERROR] ${command}: ${stderr.split('\n')[0]}`)
           }
@@ -176,7 +185,16 @@ async function runCommand(command, args = [], value = '') {
           return { stdout, stderr }
         } catch (err) {
           if (err && err.message && err.message.toLowerCase().includes('timeout')) {
-            logWithTime(`[ERROR] Timeout for ${command}`)
+            logWithTime(`[ERROR] Timeout for ${command}`, {
+              phase: 'remote-catch',
+              fullCommand: fullCommand,
+              args,
+              ip: targetIp,
+              oid: args && args.length > 0 ? args[args.length - 1] : undefined,
+              expectedValue: value === undefined ? '' : value,
+              localAddress: process.env.SNMP_SOURCE_IP,
+              error: err.message
+            })
           } else {
             logWithTime('[ERROR] SNMP remote axios:', err.message || err)
           }
@@ -202,7 +220,13 @@ async function runCommand(command, args = [], value = '') {
       logWithTime(`${command} out: ${stdout}`)
     }
     if (stderr && stderr.toLowerCase().includes('timeout')) {
-      logWithTime(`[ERROR] Timeout for ${command}`)
+      logWithTime(`[ERROR] Timeout for ${command}`, {
+        phase: 'local-stderr',
+        fullCommand,
+        args,
+        expectedValue: value === undefined ? '' : value,
+        stderrFirstLine: stderr.split('\n')[0]
+      })
     } else if (stderr) {
       logWithTime(`[ERROR] ${command}: ${stderr.split('\n')[0]}`)
     }
@@ -234,7 +258,13 @@ async function runCommand(command, args = [], value = '') {
     return { stdout, stderr }
   } catch (error) {
     if (error && error.message && error.message.toLowerCase().includes('timeout')) {
-      logWithTime(`[ERROR] Timeout for ${command}`)
+      logWithTime(`[ERROR] Timeout for ${command}`, {
+        phase: 'local-exec-catch',
+        fullCommand,
+        args,
+        expectedValue: value === undefined ? '' : value,
+        error: error.message
+      })
     } else {
       logWithTime(`[ERROR] ${command}: ${error.message}`)
     }
