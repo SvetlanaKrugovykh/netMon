@@ -10,7 +10,7 @@ async function test() {
     '-c', 'public',
     '-OXsq', '-On',
     testIp,
-    '1.3.6.1.2.1.1.1.0'
+    '.1.3.6.1.2.1.2.2.1.8.1'
   ]
   const value = '???'
   console.log('Test 1: SNMPwalk with value')
