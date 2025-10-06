@@ -33,7 +33,7 @@ async function loadSnmpMrtgObjectData(snmpMrtgObjectsList) {
         const cmdArgs = ['-v', '2c', '-c', 'public', '-Oqv', '-On', snmpObject.ip_address, oid]
         response = await runCommand('snmpget', cmdArgs)
         response = (typeof response === 'string') ? response.replace(/\s+/g, ' ').trim() : ''
-        
+
         // Extract numeric value from SNMP response (e.g., "value 12345 Status OK" -> 12345)
         let cleanValue = response
         if (typeof response === 'string') {
@@ -48,7 +48,7 @@ async function loadSnmpMrtgObjectData(snmpMrtgObjectsList) {
             continue
           }
         }
-        
+
         const snmpValue = cleanValue
 
         const snmpData = {
