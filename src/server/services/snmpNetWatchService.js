@@ -90,10 +90,7 @@ async function handleSnmpObjectDeadStatus(snmpObject, response, cycleId) {
         })
       }
       if (valueChanged) {
-        console.log('[SNMP] handleStatusChange DEAD->DEAD valueChanged', { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
-        if (snmpObject.oid === '.1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
-          console.log('[DEBUG][CONTROL_OID] About to call sendReqToDB for:', snmpObject.oid)
-        }
+        console.log('[SNMP] DEAD->DEAD valueChanged - updating DB only', { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
         await sendReqToDB('__UpdateSnmpObjectValue__', JSON.stringify({
           ip_address: snmpObject.ip_address,
           oid: snmpObject.oid,
@@ -102,7 +99,7 @@ async function handleSnmpObjectDeadStatus(snmpObject, response, cycleId) {
           timestamp: new Date().toISOString()
         }), '')
         snmpObject.lastValue = newValueStr
-        await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: deadsnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.DEAD, service: true, response, cycleId })
+        // NO handleStatusChange call - no Telegram notification for value changes within same status
       }
       if (foundIndexDead === -1) {
         deadsnmpObjectIP.push({ ip_address: snmpObject.ip_address, oid: snmpObject.oid, count: 1, lastValue: newValueStr })
@@ -176,10 +173,7 @@ async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
       }
 
       if (valueChanged) {
-        console.log('[SNMP] handleStatusChange ALIVE->ALIVE valueChanged', { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
-        if (snmpObject.oid === '.1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
-          console.log('[DEBUG][CONTROL_OID] ALIVE About to call sendReqToDB for:', snmpObject.oid)
-        }
+        console.log('[SNMP] ALIVE->ALIVE valueChanged - updating DB only', { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
         await sendReqToDB('__UpdateSnmpObjectValue__', JSON.stringify({
           ip_address: snmpObject.ip_address,
           oid: snmpObject.oid,
@@ -189,7 +183,7 @@ async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
         }), '')
         // Update lastValue in snmpObject for next cycle
         snmpObject.lastValue = newValueStr
-        await handleStatusChange({ ip_address: snmpObject, removeFromList: [], addToList: alivesnmpObjectIP, fromStatus: Status.ALIVE, toStatus: Status.ALIVE, service: true, response, cycleId })
+        // NO handleStatusChange call - no Telegram notification for value changes within same status
       }
       if (foundIndexAlive === -1) {
         alivesnmpObjectIP.push({ ip_address: snmpObject.ip_address, oid: snmpObject.oid, count: 1, lastValue: newValueStr })
