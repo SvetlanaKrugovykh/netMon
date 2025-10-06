@@ -39,7 +39,13 @@ async function runCommand(command, args = [], value = '') {
   if (SNMP_DEBUG_LEVEL > 1) {
     debugLog += `[START] ${new Date().toISOString()} Command: ${command} Args: ${args.join(' ')} Value: ${value}\n`
   }
+  let isSnmpSingleOid = false
+  let snmpTimeoutSec = parseInt(process.env.SNMP_CLIENT_TIMEOUT_SEC) || 5
   if (command.includes('snmpwalk') && args.length > 0) {
+    const oidArgs = args.filter(a => /^\.?\d+(\.\d+)+$/.test(a))
+    if (oidArgs.length === 1) {
+      isSnmpSingleOid = true
+    }
     targetIp = args.find(a => /^\d+\.\d+\.\d+\.\d+$/.test(a))
     let sourceIp = process.env.SNMP_SOURCE_IP || ''
     if (targetIp) {
@@ -57,7 +63,18 @@ async function runCommand(command, args = [], value = '') {
   }
 
   if (args.length > 0) {
-    fullCommand += ` ${args.join(' ')}`
+    if (command.includes('snmpwalk') && isSnmpSingleOid) {
+      let localArgs = args.filter(a => a !== '-OXsq')
+      if (!localArgs.includes('-Oqv')) localArgs.unshift('-Oqv')
+      if (!localArgs.includes('-On')) localArgs.unshift('-On')
+      if (!localArgs.includes('-t')) {
+        localArgs.unshift((snmpTimeoutSec).toString())
+        localArgs.unshift('-t')
+      }
+      fullCommand = 'snmpget' + ` ${localArgs.join(' ')}`
+    } else {
+      fullCommand += ` ${args.join(' ')}`
+    }
   }
 
   if (command.includes('snmpwalk') && args.length > 0 && needRemoteCheck) {
@@ -66,14 +83,30 @@ async function runCommand(command, args = [], value = '') {
       if (remote && process.env.SNMP_TOKEN) {
         try {
           let remoteCommand = command
-          if (args.length > 0) {
-            remoteCommand += ` ${args.join(' ')}`
+          let remoteArgs = [...args]
+          let useSnmpget = false
+          let remoteTimeout = snmpTimeoutSec;
+          const oidArgs = args.filter(a => /^\.?\d+(\.\d+)+$/.test(a))
+          if (oidArgs.length === 1) {
+            remoteCommand = 'snmpget'
+            useSnmpget = true
+            remoteArgs = args.filter(a => a !== '-OXsq')
+            if (!remoteArgs.includes('-Oqv')) remoteArgs.unshift('-Oqv')
+            if (!remoteArgs.includes('-On')) remoteArgs.unshift('-On')
+            if (!remoteArgs.includes('-t')) {
+              remoteArgs.unshift(remoteTimeout.toString())
+              remoteArgs.unshift('-t')
+            }
+          }
+          let remoteCommandLine = remoteCommand
+          if (remoteArgs.length > 0) {
+            remoteCommandLine += ` ${remoteArgs.join(' ')}`
           }
           if (SNMP_DEBUG_LEVEL > 1) {
-            debugLog += `[REMOTE] Full command: ${remoteCommand}\n`
+            debugLog += `[REMOTE] Full command: ${remoteCommandLine}\n`
           }
           const postData = {
-            cmdText: remoteCommand,
+            cmdText: remoteCommandLine,
             value: value === undefined ? '' : value
           }
           if (SNMP_DEBUG_LEVEL > 0) logWithTime('[REMOTE SNMP POST]', { url: remote.url, body: postData })
