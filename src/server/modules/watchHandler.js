@@ -68,7 +68,7 @@ async function handleStatusChange(args) {
   if (existingIndex !== -1) {
     addToList[existingIndex].count++
     const prevValue = addToList[existingIndex].lastValue
-    const newValue = ip_address.value
+    const newValue = ip_address.value  // Revert back to original
     function cleanVal(val) {
       return (val ?? '').toString()
         .replace(/value/gi, '')
@@ -114,7 +114,7 @@ async function handleStatusChange(args) {
       Port: ip_address?.Port || '',
       oid: ip_address?.oid || '',
       count: 1,
-      lastValue: ip_address.value
+      lastValue: ip_address.value  // Revert back to original
     })
     ip_address.status = toStatus
   }

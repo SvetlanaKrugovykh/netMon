@@ -22,14 +22,8 @@ async function checksnmpObjectStatus(snmpObject, cycleId) {
       response = await runCommand('snmpwalk', ['-v', '2c', '-c', 'public', '-OXsq', '-On', snmpObject.ip_address, snmpObject.oid], snmpObject.value)
     }
     if (response && typeof response === 'string' && response.includes('Status OK')) {
-      if (snmpObject.oid === '.1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
-        console.log('[DEBUG][CONTROL_OID] Going to handleSnmpObjectAliveStatus - Status OK detected')
-      }
       handleSnmpObjectAliveStatus(snmpObject, response, cycleId)
     } else {
-      if (snmpObject.oid === '.1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
-        console.log('[DEBUG][CONTROL_OID] Going to handleSnmpObjectDeadStatus - Status PROBLEM detected', { response })
-      }
       console.log(`[SNMP] DEAD`, { cycleId, ip: snmpObject.ip_address, desc: snmpObject.description, response, oid: snmpObject.oid })
       handleSnmpObjectDeadStatus(snmpObject, response, cycleId)
     }
@@ -97,7 +91,7 @@ async function handleSnmpObjectDeadStatus(snmpObject, response, cycleId) {
       }
       if (valueChanged) {
         console.log('[SNMP] handleStatusChange DEAD->DEAD valueChanged', { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
-        if (snmpObject.oid === '1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
+        if (snmpObject.oid === '.1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
           console.log('[DEBUG][CONTROL_OID] About to call sendReqToDB for:', snmpObject.oid)
         }
         await sendReqToDB('__UpdateSnmpObjectValue__', JSON.stringify({
@@ -136,7 +130,23 @@ async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
       await handleStatusChange({ ip_address: snmpObject, removeFromList: deadsnmpObjectIP, addToList: alivesnmpObjectIP, fromStatus: Status.DEAD, toStatus: Status.ALIVE, service: true, response, cycleId })
     } else {
       let prevValue = ''
-      if (foundIndexAlive !== -1) prevValue = alivesnmpObjectIP[foundIndexAlive].lastValue
+      if (foundIndexAlive !== -1) {
+        prevValue = alivesnmpObjectIP[foundIndexAlive].lastValue
+      } else {
+        // If not found in alivesnmpObjectIP, use lastValue from snmpObject (from DB)
+        prevValue = snmpObject.lastValue || ''
+      }
+      
+      if (snmpObject.oid === '.1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
+        console.log('[DEBUG][CONTROL_OID] ALIVE prevValue source:', {
+          oid: snmpObject.oid,
+          foundIndexAlive,
+          snmpObjectLastValue: snmpObject.lastValue,
+          aliveListLastValue: foundIndexAlive !== -1 ? alivesnmpObjectIP[foundIndexAlive].lastValue : 'N/A',
+          finalPrevValue: prevValue
+        })
+      }
+      
       const newValue = response
       function cleanVal(val) {
         return (val ?? '').toString()
@@ -152,8 +162,24 @@ async function handleSnmpObjectAliveStatus(snmpObject, response, cycleId) {
       const newNum = parseFloat(newValueStr)
       const bothNumbers = !isNaN(prevNum) && !isNaN(newNum)
       const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
+      
+      if (snmpObject.oid === '.1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
+        console.log('[DEBUG][CONTROL_OID] ALIVE Before sendReqToDB check:', {
+          oid: snmpObject.oid,
+          prevValue: prevValueStr,
+          newValue: newValueStr,
+          valueChanged,
+          prevNum,
+          newNum,
+          bothNumbers
+        })
+      }
+      
       if (valueChanged) {
         console.log('[SNMP] handleStatusChange ALIVE->ALIVE valueChanged', { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
+        if (snmpObject.oid === '.1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
+          console.log('[DEBUG][CONTROL_OID] ALIVE About to call sendReqToDB for:', snmpObject.oid)
+        }
         await sendReqToDB('__UpdateSnmpObjectValue__', JSON.stringify({
           ip_address: snmpObject.ip_address,
           oid: snmpObject.oid,
@@ -315,20 +341,6 @@ async function loadSnmpObjectsList() {
         : (obj.value !== undefined && obj.value !== null && obj.value !== '' ? obj.value : '')
       let parsedLastValue = ''
 
-      console.log('[DEBUG][loadSnmpObjectsList] Processing object:', {
-        oid: obj.oid,
-        ip: obj.ip_address,
-        description: obj.description,
-        rawLastValue,
-        rawLastValueType: typeof rawLastValue,
-        objValue: obj.value,
-        objLastValue: obj.lastValue,
-        selectedSource: obj.lastValue !== undefined && obj.lastValue !== null && obj.lastValue !== '' ? 'lastValue' : 'value',
-        objLastValueUndefined: obj.lastValue === undefined,
-        objLastValueNull: obj.lastValue === null,
-        objLastValueEmpty: obj.lastValue === ''
-      })
-
       if (typeof rawLastValue === 'string') {
         // Remove 'value', 'Status OK', 'Status PROBLEM', and extra spaces
         parsedLastValue = rawLastValue
@@ -343,13 +355,6 @@ async function loadSnmpObjectsList() {
       } else if (typeof rawLastValue === 'number') {
         parsedLastValue = rawLastValue.toString()
       }
-
-      console.log('[DEBUG][loadSnmpObjectsList] Processed result:', {
-        oid: obj.oid,
-        ip: obj.ip_address,
-        parsedLastValue,
-        finalValue: obj.value
-      })
 
       return {
         ...obj,
