@@ -57,7 +57,7 @@ async function netWatchStarter() {
       let okCount = 0
       let failCount = 0
       for (const snmpObject of snmpObjectsList) {
-  console.log(`[SNMP][pollSnmpObjectsSequentially] Polling object`, { cycleId: snmpCycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
+        console.log(`[SNMP][pollSnmpObjectsSequentially] Polling object`, { cycleId: snmpCycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
         let processed = false
         try {
           await checksnmpObjectStatus(snmpObject, snmpCycleId)
@@ -72,7 +72,7 @@ async function netWatchStarter() {
         }
         await new Promise(res => setTimeout(res, 3000))
       }
-  console.log(`[SNMP][pollSnmpObjectsSequentially] Poll cycle summary`, { cycleId: snmpCycleId, ok: okCount, fail: failCount, total: snmpObjectsList.length })
+      console.log(`[SNMP][pollSnmpObjectsSequentially] Poll cycle summary`, { cycleId: snmpCycleId, ok: okCount, fail: failCount, total: snmpObjectsList.length })
       console.log(`[SNMP] End poll cycle`, { cycleId: snmpCycleId, timestamp: new Date().toISOString() })
     }
     setInterval(() => {
