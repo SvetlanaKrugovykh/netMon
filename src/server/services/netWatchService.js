@@ -65,7 +65,7 @@ async function netWatchStarter() {
           okCount++
         } catch (err) {
           failCount++
-    }
+        }
         await new Promise(res => setTimeout(res, 3000))
       }
       console.log(`[SNMP][pollSnmpObjectsSequentially] Poll cycle summary`, { cycleId: snmpCycleId, ok: okCount, fail: failCount, total: snmpObjectsList.length })
