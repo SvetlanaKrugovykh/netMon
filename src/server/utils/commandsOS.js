@@ -83,7 +83,15 @@ async function runCommand(command, args = [], value = '') {
           }
           let response
           try {
-            response = await axios.post(remote.url, postData, { headers: postHeaders, timeout: parseInt(process.env.SNMP_CLIENT_TIMEOUT_SEC) * 1000 || 10000 })
+            response = await axios.post(
+              remote.url,
+              postData,
+              {
+                headers: postHeaders,
+                timeout: parseInt(process.env.SNMP_CLIENT_TIMEOUT_SEC) * 1000 || 10000,
+                localAddress: process.env.SNMP_SOURCE_IP
+              }
+            )
           } catch (err) {
             if (err.code === 'ECONNABORTED' || (err.message && err.message.toLowerCase().includes('timeout'))) {
               logWithTime('[ERROR] SNMP remote axios timeout', { url: remote.url, ip: targetIp, oid: args && args.length > 0 ? args[args.length - 1] : undefined })
