@@ -28,6 +28,10 @@ module.exports.mrtgToDB = async function (data) {
         const match = cleanValue.match(/-?\d+(\.\d+)?/)
         if (match) {
           cleanValue = match[0]
+        } else {
+          // No numeric value found in string like "Status OK" - skip this record
+          if (process.env.MRTG_DEBUG === '9') console.log(`Skipping non-numeric SNMP value: ${value} (OID: ${oid})`)
+          continue
         }
       }
 
