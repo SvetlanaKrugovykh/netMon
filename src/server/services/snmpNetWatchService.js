@@ -62,8 +62,22 @@ async function handleSnmpObjectDeadStatus(snmpObject, response, cycleId) {
       const newNum = parseFloat(newValueStr)
       const bothNumbers = !isNaN(prevNum) && !isNaN(newNum)
       const valueChanged = (bothNumbers && prevNum !== newNum) || (!bothNumbers && prevValueStr && newValueStr && prevValueStr !== newValueStr)
+      if (snmpObject.oid === '1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
+        console.log('[DEBUG][CONTROL_OID] Before sendReqToDB check:', {
+          oid: snmpObject.oid,
+          prevValue: prevValueStr,
+          newValue: newValueStr,
+          valueChanged,
+          prevNum,
+          newNum,
+          bothNumbers
+        })
+      }
       if (valueChanged) {
         console.log('[SNMP] handleStatusChange DEAD->DEAD valueChanged', { cycleId, ip: snmpObject.ip_address, oid: snmpObject.oid })
+        if (snmpObject.oid === '1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
+          console.log('[DEBUG][CONTROL_OID] About to call sendReqToDB for:', snmpObject.oid)
+        }
         await sendReqToDB('__UpdateSnmpObjectValue__', JSON.stringify({
           ip_address: snmpObject.ip_address,
           oid: snmpObject.oid,
@@ -286,6 +300,9 @@ async function loadSnmpObjectsList() {
         parsedLastValue = match ? match[0] : ''
       } else if (typeof rawLastValue === 'number') {
         parsedLastValue = rawLastValue.toString()
+      }
+      if (obj.oid === '1.3.6.1.4.1.171.12.72.2.1.1.1.6.26') {
+        console.log('[DEBUG][loadSnmpObjectsList] CONTROL OID:', obj.oid, 'Value:', obj.value, 'lastValue:', parsedLastValue)
       }
       return {
         ...obj,
