@@ -30,9 +30,9 @@ async function loadSnmpMrtgObjectData(snmpMrtgObjectsList) {
       const unixTimestamp = Math.floor(Date.now() / 1000)
       try {
         const oid = `${snmpObject.oid}.${snmpObject.port}`
-        const cmdArgs = ['-v', '2c', '-c', 'public', '-OXsq', '-On', snmpObject.ip_address, oid]
-  response = await runCommand('snmpwalk', cmdArgs)
-  response = (typeof response === 'string') ? response.replace(/\s+/g, ' ').trim() : ''
+        const cmdArgs = ['-v', '2c', '-c', 'public', '-Oqv', '-On', snmpObject.ip_address, oid]
+        response = await runCommand('snmpget', cmdArgs)
+        response = (typeof response === 'string') ? response.replace(/\s+/g, ' ').trim() : ''
         const match = response.match(/^(\d+)$/)
         if (!match) {
           console.log(`Invalid SNMP value received: ${response} (OID: ${snmpObject.oid})`)
