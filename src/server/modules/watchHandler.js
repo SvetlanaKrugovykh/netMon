@@ -175,6 +175,7 @@ async function sendTelegramMessage(message) {
 async function sendTelegramMessageToExceptionWoda(message) {
   try {
     if (!message.includes('WODA') && !message.includes('GARAZH') && !message.includes('VLans874')) {
+      console.log('[TELEGRAM] EXCEPTION: Message does not contain trigger words, skipping')
       return
     }
   } catch (error) {
@@ -184,20 +185,36 @@ async function sendTelegramMessageToExceptionWoda(message) {
 
   const EXCEPTION_ID_WODA = process.env.TELEGRAM_EXCEPTION_ID_WODA
   const telegramBotTokenSilver = process.env.TELEGRAM_BOT_TOKEN_SILVER
+
+  console.log('[TELEGRAM] EXCEPTION: Checking env vars:', {
+    EXCEPTION_ID_WODA: EXCEPTION_ID_WODA ? 'SET' : 'NOT SET',
+    telegramBotTokenSilver: telegramBotTokenSilver ? 'SET' : 'NOT SET'
+  })
+
+  if (!EXCEPTION_ID_WODA || !telegramBotTokenSilver) {
+    console.error('[TELEGRAM] EXCEPTION: Missing env variables - EXCEPTION_ID_WODA or TELEGRAM_BOT_TOKEN_SILVER')
+    return
+  }
+
   const apiUrl = `https://api.telegram.org/bot${telegramBotTokenSilver}/sendMessage`
 
   try {
+    console.log('[TELEGRAM] EXCEPTION: Waiting 2 seconds before sending...')
+    await sleep(2000)
+
     let modifiedText = message.replace("alive", "✅")
     modifiedText = modifiedText.replace("dead", "❌")
-    console.log('[TELEGRAM] Sending EXCEPTION message:', modifiedText)
+    console.log('[TELEGRAM] EXCEPTION: Sending message:', modifiedText)
+    console.log('[TELEGRAM] EXCEPTION: To chat ID:', EXCEPTION_ID_WODA)
+
     const response = await sendToChat(apiUrl, telegramBotTokenSilver, EXCEPTION_ID_WODA, modifiedText)
     if (!response) {
-      console.log('[TELEGRAM] Error sending Telegram EXCEPTION message.')
+      console.log('[TELEGRAM] EXCEPTION: Error sending Telegram message.')
     } else {
-      console.log('[TELEGRAM] EXCEPTION message sent successfully')
+      console.log('[TELEGRAM] EXCEPTION: Message sent successfully')
     }
   } catch (error) {
-    console.error('[TELEGRAM] Error sending Telegram EXCEPTION message:', error)
+    console.error('[TELEGRAM] EXCEPTION: Error sending Telegram message:', error)
   }
 }
 
