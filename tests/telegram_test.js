@@ -25,19 +25,7 @@ async function testTelegramMessage() {
 
   if (TELEGRAM_BOT_TOKEN && TELEGRAM_EXCEPTION_ID_WODA) {
     console.log('--- Testing Silver Bot (Exception) ---')
-
-    const chatIds = [
-      TELEGRAM_EXCEPTION_ID_WODA,           // -4540333614
-      parseInt(TELEGRAM_EXCEPTION_ID_WODA), // -4540333614 как число
-      TELEGRAM_EXCEPTION_ID_WODA.toString(), // -4540333614 как строка
-      Math.abs(parseInt(TELEGRAM_EXCEPTION_ID_WODA)), // 4540333614 без минуса
-    ]
-
-    for (let i = 0; i < chatIds.length; i++) {
-      console.log(`\n--- Attempt ${i + 1}: Chat ID = ${chatIds[i]} ---`)
-      await testBot(TELEGRAM_BOT_TOKEN, chatIds[i], `WODA Test ${i + 1} 🚨`)
-      await new Promise(resolve => setTimeout(resolve, 1000)) // Пауза между попытками
-    }
+    await testBot(TELEGRAM_BOT_TOKEN, TELEGRAM_EXCEPTION_ID_WODA, 'WODA Test Exception Message 🚨')
   } else {
     console.log('❌ Silver bot credentials missing')
   }
