@@ -4,7 +4,6 @@ require('dotenv').config()
 async function testTelegramMessage() {
   console.log('=== TELEGRAM BOT TEST ===')
 
-  // Загружаем переменные из .env
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
   const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID
   const TELEGRAM_BOT_TOKEN_SILVER = process.env.TELEGRAM_BOT_TOKEN_SILVER
@@ -17,7 +16,6 @@ async function testTelegramMessage() {
   console.log('TELEGRAM_EXCEPTION_ID_WODA:', TELEGRAM_EXCEPTION_ID_WODA ? 'SET' : 'NOT SET')
   console.log('')
 
-  // Тест основного бота
   if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
     console.log('--- Testing Main Bot ---')
     await testBot(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, 'Main Bot Test Message 🤖')
@@ -27,10 +25,9 @@ async function testTelegramMessage() {
 
   console.log('')
 
-  // Тест Silver бота для исключений
-  if (TELEGRAM_BOT_TOKEN_SILVER && TELEGRAM_EXCEPTION_ID_WODA) {
+  if (TELEGRAM_BOT_TOKEN && TELEGRAM_EXCEPTION_ID_WODA) {
     console.log('--- Testing Silver Bot (Exception) ---')
-    await testBot(TELEGRAM_BOT_TOKEN_SILVER, TELEGRAM_EXCEPTION_ID_WODA, 'WODA Test Exception Message 🚨')
+    await testBot(TELEGRAM_BOT_TOKEN, TELEGRAM_EXCEPTION_ID_WODA, 'WODA Test Exception Message 🚨')
   } else {
     console.log('❌ Silver bot credentials missing')
   }
@@ -78,7 +75,6 @@ async function testBot(botToken, chatId, message) {
       if (error.response.data.description) {
         console.log('Telegram Error:', error.response.data.description)
 
-        // Анализ типичных ошибок
         if (error.response.data.description.includes('chat not found')) {
           console.log('💡 Solution: Check if chat ID is correct and bot is added to the chat')
         } else if (error.response.data.description.includes('bot was blocked')) {
