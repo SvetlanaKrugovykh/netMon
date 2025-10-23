@@ -91,7 +91,6 @@ async function testBot(botToken, chatId, message) {
   console.log('---')
 }
 
-// Запускаем тест
 testTelegramMessage().catch(error => {
   console.error('Test failed:', error)
   process.exit(1)
