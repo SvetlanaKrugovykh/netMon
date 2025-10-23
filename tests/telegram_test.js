@@ -6,13 +6,11 @@ async function testTelegramMessage() {
 
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
   const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID
-  const TELEGRAM_BOT_TOKEN_SILVER = process.env.TELEGRAM_BOT_TOKEN_SILVER
   const TELEGRAM_EXCEPTION_ID_WODA = process.env.TELEGRAM_EXCEPTION_ID_WODA
 
   console.log('Environment variables:')
   console.log('TELEGRAM_BOT_TOKEN:', TELEGRAM_BOT_TOKEN ? 'SET' : 'NOT SET')
   console.log('TELEGRAM_CHAT_ID:', TELEGRAM_CHAT_ID ? 'SET' : 'NOT SET')
-  console.log('TELEGRAM_BOT_TOKEN_SILVER:', TELEGRAM_BOT_TOKEN_SILVER ? 'SET' : 'NOT SET')
   console.log('TELEGRAM_EXCEPTION_ID_WODA:', TELEGRAM_EXCEPTION_ID_WODA ? 'SET' : 'NOT SET')
   console.log('')
 
