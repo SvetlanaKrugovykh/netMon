@@ -3,7 +3,7 @@ require('dotenv').config()
 
 async function testTelegramMessage() {
   console.log('=== TELEGRAM BOT TEST ===')
-  
+
   // Загружаем переменные из .env
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
   const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID
@@ -38,12 +38,12 @@ async function testTelegramMessage() {
 
 async function testBot(botToken, chatId, message) {
   const apiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`
-  
+
   console.log(`Bot Token: ${botToken.substring(0, 10)}...`)
   console.log(`Chat ID: ${chatId}`)
   console.log(`Message: ${message}`)
   console.log(`API URL: ${apiUrl}`)
-  
+
   try {
     const response = await axios({
       method: 'post',
@@ -61,23 +61,23 @@ async function testBot(botToken, chatId, message) {
     console.log('✅ SUCCESS')
     console.log('Status:', response.status)
     console.log('Response data:', JSON.stringify(response.data, null, 2))
-    
+
     if (response.data.ok) {
       console.log('🎉 Message sent successfully!')
     } else {
       console.log('❌ Telegram API returned error:', response.data.description)
     }
-    
+
   } catch (error) {
     console.log('❌ ERROR')
     if (error.response) {
       console.log('Status:', error.response.status)
       console.log('Status Text:', error.response.statusText)
       console.log('Response data:', JSON.stringify(error.response.data, null, 2))
-      
+
       if (error.response.data.description) {
         console.log('Telegram Error:', error.response.data.description)
-        
+
         // Анализ типичных ошибок
         if (error.response.data.description.includes('chat not found')) {
           console.log('💡 Solution: Check if chat ID is correct and bot is added to the chat')
@@ -91,7 +91,7 @@ async function testBot(botToken, chatId, message) {
       console.log('Network Error:', error.message)
     }
   }
-  
+
   console.log('---')
 }
 
