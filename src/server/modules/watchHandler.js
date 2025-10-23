@@ -207,14 +207,28 @@ async function sendTelegramMessageToExceptionWoda(message) {
     console.log('[TELEGRAM] EXCEPTION: Sending message:', modifiedText)
     console.log('[TELEGRAM] EXCEPTION: To chat ID:', EXCEPTION_ID_WODA)
 
+    console.log('[TELEGRAM] EXCEPTION: Calling sendToChat with:', {
+      apiUrl: apiUrl,
+      chatId: EXCEPTION_ID_WODA,
+      messageLength: modifiedText.length
+    })
+    
     const response = await sendToChat(apiUrl, telegramBotTokenSilver, EXCEPTION_ID_WODA, modifiedText)
+    console.log('[TELEGRAM] EXCEPTION: sendToChat response:', response)
+    
     if (!response) {
       console.log('[TELEGRAM] EXCEPTION: Error sending Telegram message.')
     } else {
       console.log('[TELEGRAM] EXCEPTION: Message sent successfully')
     }
   } catch (error) {
-    console.error('[TELEGRAM] EXCEPTION: Error sending Telegram message:', error)
+    console.error('[TELEGRAM] EXCEPTION: Error sending Telegram message:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      stack: error.stack
+    })
   }
 }
 
