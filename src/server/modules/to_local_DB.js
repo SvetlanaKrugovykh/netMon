@@ -22,7 +22,7 @@ async function sendReqToDB(reqType, data, _text) {
         Query: `Execute;${reqType};${dataString};КОНЕЦ`,
       }
     })
-    if (!response.status == 200) {
+    if (response.status !== 200) {
       return null
     }
 
@@ -59,7 +59,7 @@ async function sendToChat(url_address, token, chatId, message) {
         text: message,
       },
     })
-    if (!response.status == 200) {
+    if (response.status !== 200) {
       return null
     } else {
       let answer = response.data.toString()

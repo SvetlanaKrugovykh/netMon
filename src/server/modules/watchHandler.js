@@ -2,6 +2,7 @@
 const { sendReqToDB, sendToChat } = require('./to_local_DB.js')
 
 let telegramBotToken = process.env.TELEGRAM_BOT_TOKEN
+let telegramBotTokenSilver = process.env.TELEGRAM_BOT_TOKEN_SILVER
 let telegramChatId = process.env.TELEGRAM_CHAT_ID
 
 let lastTelegramSendTime = 0
@@ -184,18 +185,14 @@ async function sendTelegramMessageToExceptionWoda(message) {
   }
 
   const EXCEPTION_ID_WODA = process.env.TELEGRAM_EXCEPTION_ID_WODA
+  await delay(2000)
 
-  console.log('[TELEGRAM] EXCEPTION: Checking env vars:', {
-    EXCEPTION_ID_WODA: EXCEPTION_ID_WODA ? 'SET' : 'NOT SET',
-    telegramBotToken: telegramBotToken ? 'SET' : 'NOT SET'
-  })
-
-  if (!EXCEPTION_ID_WODA || !telegramBotToken) {
+  if (!EXCEPTION_ID_WODA || !telegramBotTokenSilver) {
     console.error('[TELEGRAM] EXCEPTION: Missing env variables - EXCEPTION_ID_WODA or TELEGRAM_BOT_TOKEN_SILVER')
     return
   }
 
-  const apiUrl = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`
+  const apiUrl = `https://api.telegram.org/bot${telegramBotTokenSilver}/sendMessage`
 
   try {
     console.log('[TELEGRAM] EXCEPTION: Waiting 2 seconds before sending...')
@@ -212,7 +209,7 @@ async function sendTelegramMessageToExceptionWoda(message) {
       messageLength: modifiedText.length
     })
 
-    const response = await sendToChat(apiUrl, telegramBotToken, EXCEPTION_ID_WODA, modifiedText)
+    const response = await sendToChat(apiUrl, telegramBotTokenSilver, EXCEPTION_ID_WODA, modifiedText)
     console.log('[TELEGRAM] EXCEPTION: sendToChat response:', response)
 
     if (!response) {

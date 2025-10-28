@@ -1,10 +1,15 @@
 const axios = require('axios')
 require('dotenv').config()
 
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 async function testTelegramMessage() {
   console.log('=== TELEGRAM BOT TEST ===')
 
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
+  const TELEGRAM_BOT_TOKEN_SILVER = process.env.TELEGRAM_BOT_TOKEN_SILVER
   const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID
   const TELEGRAM_EXCEPTION_ID_WODA = process.env.TELEGRAM_EXCEPTION_ID_WODA
 
@@ -22,10 +27,12 @@ async function testTelegramMessage() {
   }
 
   console.log('')
+  // Pause 2s to avoid potential rate limits or ordering issues between sends
+  await delay(2000)
 
   if (TELEGRAM_BOT_TOKEN && TELEGRAM_EXCEPTION_ID_WODA) {
     console.log('--- Testing Silver Bot (Exception) ---')
-    await testBot(TELEGRAM_BOT_TOKEN, TELEGRAM_EXCEPTION_ID_WODA, 'WODA Test Exception Message 🚨')
+    await testBot(TELEGRAM_BOT_TOKEN_SILVER, TELEGRAM_EXCEPTION_ID_WODA, 'WODA Test Exception Message 🚨')
   } else {
     console.log('❌ Silver bot credentials missing')
   }
