@@ -185,7 +185,7 @@ async function sendTelegramMessageToExceptionWoda(message) {
   }
 
   const EXCEPTION_ID_WODA = process.env.TELEGRAM_EXCEPTION_ID_WODA
-  await delay(2000)
+  await sleep(2000)
 
   if (!EXCEPTION_ID_WODA || !telegramBotTokenSilver) {
     console.error('[TELEGRAM] EXCEPTION: Missing env variables - EXCEPTION_ID_WODA or TELEGRAM_BOT_TOKEN_SILVER')
