@@ -48,7 +48,7 @@ async function sendReqToDB(reqType, data, _text) {
     if (err.response) {
       console.error(`[sendReqToDB] Server response: HTTP ${err.response.status}`)
       if (err.response.data) {
-        const preview = typeof err.response.data === 'string' 
+        const preview = typeof err.response.data === 'string'
           ? err.response.data.substring(0, 200)
           : JSON.stringify(err.response.data).substring(0, 200)
         console.error(`[sendReqToDB] Error details: ${preview}`)
