@@ -24,7 +24,7 @@ async function sendReqToDB(reqType, data, _text) {
         Authorization: `${AUTH_TOKEN}`,
         'Content-Type': 'application/json',
       },
-      timeout: 30000,
+      timeout: 60000,
       data: {
         Query: `Execute;${reqType};${dataString};КОНЕЦ`,
       }
