@@ -40,27 +40,17 @@ async function handleStatusChange(args) {
     const isMatchingOid = ip_address.oid && item.oid === ip_address.oid.toString();
     const isMatchingPort = ip_address.Port && item.Port === ip_address.Port?.toString();
     const result = (isMatchingIp && (isMatchingOid || isMatchingPort)) || (!ip_address.oid && !ip_address.Port && isMatchingIp)
-    if (!result) {
-      console.log('[DEBUG handleStatusChange] Not matched:', {
-        item_ip: item.ip_address,
-        arg_ip: ip_address.ip_address,
-        item_oid: item.oid,
-        arg_oid: ip_address.oid,
-        item_port: item.Port,
-        arg_port: ip_address.Port
-      })
-    }
     return result
   });
-  if (existingIndex === -1) {
+  
+  // Log only if not found and only the summary, not every iteration
+  if (existingIndex === -1 && process.env.DEBUG_WATCH_HANDLER === 'true') {
     console.log('[DEBUG handleStatusChange] No match found in addToList for:', {
       ip_address: ip_address.ip_address,
       oid: ip_address.oid,
-      Port: ip_address.Port
+      Port: ip_address.Port,
+      addToListLength: addToList.length
     })
-    if (addToList.length > 0) {
-      console.log('[DEBUG handleStatusChange] addToList contents:', addToList)
-    }
   }
 
 
