@@ -39,6 +39,19 @@
       "runtimeArgs": [
         "--inspect"
       ]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "test_load_lists",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "runtimeExecutable": "node",
+      "program": "${workspaceFolder}/tests/test_load_lists.js",
+      "runtimeArgs": [
+        "--inspect"
+      ]
     }
   ]
 }
