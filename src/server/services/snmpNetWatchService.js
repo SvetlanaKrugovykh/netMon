@@ -322,7 +322,7 @@ async function loadSnmpObjectsList() {
       console.error('[SNMP] ❌ No data received from DB')
       return []
     }
-    
+
     let parsedData
     try {
       parsedData = JSON.parse(data)
@@ -331,12 +331,12 @@ async function loadSnmpObjectsList() {
       console.error('[SNMP] Data preview:', data.substring(0, 200))
       return []
     }
-    
+
     if (!parsedData.ResponseArray) {
       console.error('[SNMP] ❌ Missing ResponseArray, keys:', Object.keys(parsedData).join(', '))
       return []
     }
-    
+
     console.log(`[SNMP] ✅ Loaded ${parsedData.ResponseArray.length} objects`)
     // Add lastValue to each object for status tracking
     // Use lastValue from response if present, parse only the numeric part

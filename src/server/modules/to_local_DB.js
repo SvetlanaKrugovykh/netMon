@@ -7,7 +7,7 @@ async function sendReqToDB(reqType, data, _text) {
 
   let dataString = JSON.stringify(data)
   const URL = (reqType === '__traffic__' || reqType === '__mrtg__') ? LOG_URL : USUAL_URL
-  
+
   // Log only important requests, skip frequent traffic/mrtg
   const shouldLog = reqType !== '__traffic__' && reqType !== '__mrtg__'
 
@@ -15,7 +15,7 @@ async function sendReqToDB(reqType, data, _text) {
     if (shouldLog) {
       console.log(`[sendReqToDB] ${reqType}`)
     }
-    
+
     const response = await axios({
       method: 'post',
       url: URL,
@@ -29,7 +29,7 @@ async function sendReqToDB(reqType, data, _text) {
         Query: `Execute;${reqType};${dataString};КОНЕЦ`,
       }
     })
-    
+
     if (response.status !== 200) {
       console.error(`[sendReqToDB] ${reqType} - HTTP ${response.status}`)
       return null
