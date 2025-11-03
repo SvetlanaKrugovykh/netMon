@@ -316,22 +316,28 @@ function snmpAnswersAnalizer(snmpObject, varbinds) {
 
 async function loadSnmpObjectsList() {
   try {
+    console.log('[SNMP] Loading objects from DB...')
     const data = await sendReqToDB('__GetSnmpObjectsForWatching__', '', '')
     if (!data) {
-      console.error('No data received from sendReqToDB')
+      console.error('[SNMP] ❌ No data received from DB')
       return []
     }
+    
     let parsedData
     try {
       parsedData = JSON.parse(data)
     } catch (parseErr) {
-      console.error('Error parsing JSON:', parseErr, 'Raw data:', data)
+      console.error('[SNMP] ❌ JSON parse error:', parseErr.message)
+      console.error('[SNMP] Data preview:', data.substring(0, 200))
       return []
     }
+    
     if (!parsedData.ResponseArray) {
-      console.error('ResponseArray is missing in parsedData:', parsedData)
+      console.error('[SNMP] ❌ Missing ResponseArray, keys:', Object.keys(parsedData).join(', '))
       return []
     }
+    
+    console.log(`[SNMP] ✅ Loaded ${parsedData.ResponseArray.length} objects`)
     // Add lastValue to each object for status tracking
     // Use lastValue from response if present, parse only the numeric part
     return parsedData.ResponseArray.map(obj => {

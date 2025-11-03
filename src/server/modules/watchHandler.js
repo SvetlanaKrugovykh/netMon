@@ -42,7 +42,7 @@ async function handleStatusChange(args) {
     const result = (isMatchingIp && (isMatchingOid || isMatchingPort)) || (!ip_address.oid && !ip_address.Port && isMatchingIp)
     return result
   });
-  
+
   // Log only if not found and only the summary, not every iteration
   if (existingIndex === -1 && process.env.DEBUG_WATCH_HANDLER === 'true') {
     console.log('[DEBUG handleStatusChange] No match found in addToList for:', {
