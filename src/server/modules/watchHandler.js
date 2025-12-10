@@ -165,10 +165,16 @@ async function sendTelegramMessage(message) {
 
 async function sendTelegramMessageToExceptionWoda(message) {
   try {
-    if (!message.includes('WODA') && !message.includes('GARAZH') && !message.includes('VLans874')) {
-      console.log('[TELEGRAM] EXCEPTION: Message does not contain trigger words, skipping')
-      return
-    }
+    if (
+			!message.includes("WODA") &&
+			!message.includes("GARAZH") &&
+			!message.includes("Port_3 Obuhov ONU 220V")
+		) {
+			console.log(
+				"[TELEGRAM] EXCEPTION: Message does not contain trigger words, skipping"
+			)
+			return
+		}
   } catch (error) {
     console.error('[TELEGRAM] Error message.includes(EXCEPTION_Msgs)', error)
     return
