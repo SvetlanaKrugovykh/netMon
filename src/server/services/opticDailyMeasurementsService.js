@@ -1,0 +1,175 @@
+const fs = require('fs')
+const path = require('path')
+const { runCommand } = require('../utils/commandsOS')
+const { sendToChat } = require('../modules/to_local_DB')
+
+const DAILY_HOUR = 9
+const DAILY_MINUTE = 30
+const OPTIC_COMMUNITY = process.env.OPTIC_SNMP_COMMUNITY || 'public'
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID
+const OPTIC_ENABLED = process.env.OPTIC_MEASUREMENTS_ENABLED !== 'false'
+const IMMEDIATE_RUN = process.env.OPTIC_MEASUREMENTS_RUN_IMMEDIATELY === 'true'
+
+const configPath = path.resolve(__dirname, '..', '..', 'data', 'opticMeasurements.local.json')
+
+function msUntilNextRun(hour, minute) {
+  const now = new Date()
+  const next = new Date(now.getTime())
+  next.setHours(hour, minute, 0, 0)
+  if (next <= now) {
+    next.setDate(next.getDate() + 1)
+  }
+  return { delayMs: next.getTime() - now.getTime(), next }
+}
+
+function loadMeasurementsConfig() {
+  try {
+    const raw = fs.readFileSync(configPath, 'utf8')
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      console.error('[OpticDaily] Config is not an array, path:', configPath)
+      return []
+    }
+    const normalized = parsed
+      .map(item => ({
+        name: item.name || item.description,
+        ip_address: item.ip_address,
+        oid: item.oid,
+        unit: item.unit || '',
+        value: item.value || ''
+      }))
+      .filter(item => item.name && item.ip_address && item.oid)
+    if (normalized.length === 0) {
+      console.error('[OpticDaily] Config array is empty after validation')
+    }
+    return normalized
+  } catch (err) {
+    console.error('[OpticDaily] Unable to read config file', { configPath, error: err.message })
+    return []
+  }
+}
+
+function cleanValue(raw) {
+  if (!raw && raw !== 0) return ''
+  return raw.toString()
+    .replace(/value/gi, '')
+    .replace(/Status OK/gi, '')
+    .replace(/Status PROBLEM/gi, '')
+    .replace(/=/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+async function collectMeasurements(definitions) {
+  const results = []
+  for (const item of definitions) {
+    let response = ''
+    try {
+      response = await runCommand(
+        'snmpwalk',
+        ['-v', '2c', '-c', OPTIC_COMMUNITY, '-OXsq', '-On', item.ip_address, item.oid],
+        item.value || ''
+      )
+    } catch (err) {
+      console.error('[OpticDaily] SNMP error', { name: item.name, ip: item.ip_address, oid: item.oid, error: err.message })
+      response = null
+    }
+
+    const cleaned = cleanValue(response)
+    const formattedValue = cleaned ? `${cleaned}${item.unit ? ` ${item.unit}` : ''}` : 'n/a'
+    results.push({
+      name: item.name,
+      value: formattedValue,
+      raw: response
+    })
+  }
+  return results
+}
+
+function formatMessage(results) {
+  if (!results || results.length === 0) return ''
+
+  const ts = new Date()
+  const tsStr = `${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, '0')}-${String(ts.getDate()).padStart(2, '0')} ${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')}`
+
+  const nameWidth = Math.max('Name'.length, ...results.map(item => item.name.length))
+  const valWidth = Math.max('Value'.length, ...results.map(item => item.value.length))
+
+  function line(char) {
+    return `${char}${'-'.repeat(nameWidth + 2)}+${'-'.repeat(valWidth + 2)}${char}`
+  }
+
+  const header = line('+')
+  const rows = results.map(item => {
+    const nameCell = item.name.padEnd(nameWidth, ' ')
+    const valCell = item.value.padEnd(valWidth, ' ')
+    return `| ${nameCell} | ${valCell} |`
+  })
+
+  return [
+    `Optic measurements ${tsStr}`,
+    header,
+    `| ${'Name'.padEnd(nameWidth, ' ')} | ${'Value'.padEnd(valWidth, ' ')} |`,
+    header.replace(/\+/g, '+'),
+    ...rows,
+    header
+  ].join('\n')
+}
+
+async function sendTelegramMessage(text) {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+    console.error('[OpticDaily] Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID')
+    return
+  }
+  const apiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`
+  try {
+    const response = await sendToChat(apiUrl, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, text)
+    if (!response) {
+      console.error('[OpticDaily] Failed to send Telegram message')
+    }
+  } catch (err) {
+    console.error('[OpticDaily] Telegram send error', err.message || err)
+  }
+}
+
+async function runOpticMeasurementsOnce() {
+  const config = loadMeasurementsConfig()
+  if (!config.length) {
+    console.error('[OpticDaily] Nothing to measure (empty config)')
+    return
+  }
+
+  const results = await collectMeasurements(config)
+  const message = formatMessage(results)
+  if (!message) {
+    console.error('[OpticDaily] Nothing to send to Telegram (empty message)')
+    return
+  }
+  await sendTelegramMessage(message)
+}
+
+function scheduleNextRun() {
+  const { delayMs, next } = msUntilNextRun(DAILY_HOUR, DAILY_MINUTE)
+  console.log('[OpticDaily] Next run scheduled at', next.toISOString())
+  setTimeout(async () => {
+    await runOpticMeasurementsOnce()
+    scheduleNextRun()
+  }, delayMs)
+}
+
+function startOpticMeasurementsScheduler() {
+  if (!OPTIC_ENABLED) {
+    console.log('[OpticDaily] Scheduler disabled via OPTIC_MEASUREMENTS_ENABLED')
+    return
+  }
+  if (IMMEDIATE_RUN) {
+    runOpticMeasurementsOnce()
+  }
+  scheduleNextRun()
+}
+
+module.exports = {
+  startOpticMeasurementsScheduler,
+  runOpticMeasurementsOnce
+}

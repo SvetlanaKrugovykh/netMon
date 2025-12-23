@@ -2,6 +2,7 @@ const Fastify = require('fastify')
 const dotenv = require('dotenv')
 const { updateTables } = require('./db/tablesUpdate')
 const authPlugin = require('./plugins/app.auth.plugin')
+const { startOpticMeasurementsScheduler } = require('./services/opticDailyMeasurementsService')
 
 dotenv.config()
 
@@ -41,6 +42,13 @@ setTimeout(() => {
       console.log('[NetMon] Monitoring services started via netWatchService.')
     } catch (err) {
       console.error('[NetMon] Error starting monitoring services:', err.message)
+    }
+
+    try {
+      startOpticMeasurementsScheduler()
+      console.log('[NetMon] Optic daily measurements scheduler started.')
+    } catch (err) {
+      console.error('[NetMon] Error starting optic measurements scheduler:', err.message)
     }
   } catch (err) {
     console.error('[NetMon] Error starting services:', err.message)
