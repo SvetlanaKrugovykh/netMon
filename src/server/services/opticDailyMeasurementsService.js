@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const snmp = require('snmp-native')
 const { runCommand } = require('../utils/commandsOS')
 const { sendToChat } = require('../modules/to_local_DB')
 
@@ -94,16 +95,30 @@ async function collectMeasurements(definitions) {
   for (const item of definitions) {
     let response = ''
     try {
+      // Prefer direct SNMP get via snmp-native to obtain raw values
       const isSingleOid = /^\.?\d+(?:\.\d+)+$/.test(item.oid)
       if (isSingleOid) {
-        // Use snmpget for single OID scalars to get clean numeric values
-        response = await runCommand(
-          'snmpget',
-          ['-v', '2c', '-c', OPTIC_COMMUNITY, '-Oqv', '-On', item.ip_address, item.oid],
-          item.value || ''
-        )
+        const session = new snmp.Session({ host: item.ip_address, community: OPTIC_COMMUNITY, timeout: SNMP_CLIENT_TIMEOUT_SEC * 1000 })
+        try {
+          const varbinds = await new Promise((resolve, reject) => {
+            session.get({ oid: item.oid }, (error, vb) => {
+              if (error) return reject(error)
+              resolve(vb)
+            })
+          })
+          if (Array.isArray(varbinds) && varbinds.length > 0) {
+            response = varbinds[0].value
+          } else {
+            response = null
+          }
+        } catch (err) {
+          console.error('[OpticDaily] SNMP-native error', { name: item.name, ip: item.ip_address, oid: item.oid, error: err.message })
+          response = null
+        } finally {
+          try { session.close() } catch (_) {}
+        }
       } else {
-        // Fallback to snmpwalk for tables/multi-OID queries
+        // Fallback to CLI for non-scalar OIDs
         response = await runCommand(
           'snmpwalk',
           ['-v', '2c', '-c', OPTIC_COMMUNITY, '-OXsq', '-On', item.ip_address, item.oid],
