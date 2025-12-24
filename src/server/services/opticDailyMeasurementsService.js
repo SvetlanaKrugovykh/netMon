@@ -174,16 +174,22 @@ function formatMessage(results) {
 async function sendTelegramMessage(text) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
     console.error('[OpticDaily] Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID')
+    console.error('[OpticDaily] Token present:', !!TELEGRAM_BOT_TOKEN, 'Chat ID present:', !!TELEGRAM_CHAT_ID)
     return
   }
   const apiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`
   try {
+    console.log('[OpticDaily][Telegram] Sending to chat:', TELEGRAM_CHAT_ID)
+    console.log('[OpticDaily][Telegram] Message length:', text.length)
     const response = await sendToChat(apiUrl, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, text)
+    console.log('[OpticDaily][Telegram] Response received:', !!response)
     if (!response) {
       console.error('[OpticDaily] Failed to send Telegram message')
+    } else {
+      console.log('[OpticDaily] Message sent successfully')
     }
   } catch (err) {
-    console.error('[OpticDaily] Telegram send error', err.message || err)
+    console.error('[OpticDaily] Telegram send error:', err.message || err)
   }
 }
 
