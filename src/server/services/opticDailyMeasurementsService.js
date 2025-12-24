@@ -10,8 +10,35 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID
 const OPTIC_ENABLED = process.env.OPTIC_MEASUREMENTS_ENABLED !== 'false'
 const IMMEDIATE_RUN = process.env.OPTIC_MEASUREMENTS_RUN_IMMEDIATELY === 'true'
+const SNMP_CLIENT_TIMEOUT_SEC = parseInt(process.env.SNMP_CLIENT_TIMEOUT_SEC || '5')
 
-const configPath = path.resolve(__dirname, '..', '..', 'data', 'opticMeasurements.local.json')
+function resolveConfigPath() {
+  // 1) explicit env override (absolute or relative to cwd)
+  const envPath = (process.env.OPTIC_MEASUREMENTS_CONFIG || '').trim()
+  if (envPath) {
+    const abs = path.isAbsolute(envPath) ? envPath : path.resolve(process.cwd(), envPath)
+    if (fs.existsSync(abs)) {
+      console.log('[OpticDaily] Using config from OPTIC_MEASUREMENTS_CONFIG:', abs)
+      return abs
+    } else {
+      console.error('[OpticDaily] OPTIC_MEASUREMENTS_CONFIG points to missing file:', abs)
+    }
+  }
+  // 2) local file next to repo (git-ignored)
+  const localPath = path.resolve(__dirname, '..', '..', 'data', 'opticMeasurements.local.json')
+  if (fs.existsSync(localPath)) {
+    console.log('[OpticDaily] Using local config:', localPath)
+    return localPath
+  }
+  // 3) fallback to sample committed in repo
+  const samplePath = path.resolve(__dirname, '..', '..', 'data', 'opticMeasurements.sample.json')
+  if (fs.existsSync(samplePath)) {
+    console.log('[OpticDaily] Using sample config:', samplePath)
+    return samplePath
+  }
+  // 4) not found => return default local path and let reader fail gracefully
+  return localPath
+}
 
 function msUntilNextRun(hour, minute) {
   const now = new Date()
@@ -25,10 +52,11 @@ function msUntilNextRun(hour, minute) {
 
 function loadMeasurementsConfig() {
   try {
-    const raw = fs.readFileSync(configPath, 'utf8')
+    const cfgPath = resolveConfigPath()
+    const raw = fs.readFileSync(cfgPath, 'utf8')
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) {
-      console.error('[OpticDaily] Config is not an array, path:', configPath)
+      console.error('[OpticDaily] Config is not an array, path:', cfgPath)
       return []
     }
     const normalized = parsed
@@ -45,7 +73,7 @@ function loadMeasurementsConfig() {
     }
     return normalized
   } catch (err) {
-    console.error('[OpticDaily] Unable to read config file', { configPath, error: err.message })
+    console.error('[OpticDaily] Unable to read config file', { error: err.message })
     return []
   }
 }
@@ -66,11 +94,22 @@ async function collectMeasurements(definitions) {
   for (const item of definitions) {
     let response = ''
     try {
-      response = await runCommand(
-        'snmpwalk',
-        ['-v', '2c', '-c', OPTIC_COMMUNITY, '-OXsq', '-On', item.ip_address, item.oid],
-        item.value || ''
-      )
+      const isSingleOid = /^\.?\d+(?:\.\d+)+$/.test(item.oid)
+      if (isSingleOid) {
+        // Use snmpget for single OID scalars to get clean numeric values
+        response = await runCommand(
+          'snmpget',
+          ['-v', '2c', '-c', OPTIC_COMMUNITY, '-Oqv', '-On', item.ip_address, item.oid],
+          item.value || ''
+        )
+      } else {
+        // Fallback to snmpwalk for tables/multi-OID queries
+        response = await runCommand(
+          'snmpwalk',
+          ['-v', '2c', '-c', OPTIC_COMMUNITY, '-OXsq', '-On', item.ip_address, item.oid],
+          item.value || ''
+        )
+      }
     } catch (err) {
       console.error('[OpticDaily] SNMP error', { name: item.name, ip: item.ip_address, oid: item.oid, error: err.message })
       response = null
