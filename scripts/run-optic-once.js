@@ -5,7 +5,7 @@ const { runOpticMeasurementsOnce } = require('../src/server/services/opticDailyM
 
 async function main() {
   const args = process.argv.slice(2)
-  const isDry = args.includes('--dry') || (process.env.OPTIC_DRY_RUN || '').toLowerCase() === 'true'
+  const isDry = args.includes('--dry')
 
   console.log('[OpticDaily][Runner] Starting once. DRY-RUN =', isDry)
   console.log('[OpticDaily][Runner] Community =', process.env.OPTIC_SNMP_COMMUNITY || 'public')
