@@ -159,28 +159,18 @@ function formatMessage(results) {
   })
 
   const nameWidth = Math.max('Name'.length, ...dataWithIcons.map(item => item.name.length))
-  const valWidth = Math.max('Value'.length, ...dataWithIcons.map(item => (item.icon + ' ' + item.value).length))
 
-  function line() {
-    return `+${'-'.repeat(nameWidth + 2)}+${'-'.repeat(valWidth + 2)}+`
-  }
-
-  const header = line()
   const rows = dataWithIcons.map(item => {
     const nameCell = item.name.padEnd(nameWidth, ' ')
-    const valCell = (item.icon + ' ' + item.value).padEnd(valWidth, ' ')
-    return `| ${nameCell} | ${valCell} |`
+    return `${item.icon} ${nameCell}  ${item.value}`
   })
 
   return [
-    '📊 *Optic Measurements Daily Report*',
+    '📊 Optic Measurements Daily Report',
     `🕐 ${tsStr}`,
     '',
-    header,
-    `| ${'Name'.padEnd(nameWidth, ' ')} | ${'Value'.padEnd(valWidth, ' ')} |`,
-    header,
     ...rows,
-    header,
+    '',
     '✅ Measurements completed'
   ].join('\n')
 }
