@@ -147,27 +147,41 @@ function formatMessage(results) {
   const ts = new Date()
   const tsStr = `${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, '0')}-${String(ts.getDate()).padStart(2, '0')} ${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')}`
 
-  const nameWidth = Math.max('Name'.length, ...results.map(item => item.name.length))
-  const valWidth = Math.max('Value'.length, ...results.map(item => item.value.length))
+  // Prepare data with icons
+  const dataWithIcons = results.map(item => {
+    let icon = '  '
+    if (item.name.toLowerCase().includes('rx')) {
+      icon = '📥'
+    } else if (item.name.toLowerCase().includes('tx')) {
+      icon = '📤'
+    }
+    return { name: item.name, value: item.value, icon }
+  })
 
-  function line(char) {
-    return `${char}${'-'.repeat(nameWidth + 2)}+${'-'.repeat(valWidth + 2)}${char}`
+  const nameWidth = Math.max('Name'.length, ...dataWithIcons.map(item => item.name.length))
+  const valWidth = Math.max('Value'.length, ...dataWithIcons.map(item => (item.icon + ' ' + item.value).length))
+
+  function line() {
+    return `+${'-'.repeat(nameWidth + 2)}+${'-'.repeat(valWidth + 2)}+`
   }
 
-  const header = line('+')
-  const rows = results.map(item => {
+  const header = line()
+  const rows = dataWithIcons.map(item => {
     const nameCell = item.name.padEnd(nameWidth, ' ')
-    const valCell = item.value.padEnd(valWidth, ' ')
+    const valCell = (item.icon + ' ' + item.value).padEnd(valWidth, ' ')
     return `| ${nameCell} | ${valCell} |`
   })
 
   return [
-    `Optic measurements ${tsStr}`,
+    '📊 *Optic Measurements Daily Report*',
+    `🕐 ${tsStr}`,
+    '',
     header,
     `| ${'Name'.padEnd(nameWidth, ' ')} | ${'Value'.padEnd(valWidth, ' ')} |`,
-    header.replace(/\+/g, '+'),
+    header,
     ...rows,
-    header
+    header,
+    '✅ Measurements completed'
   ].join('\n')
 }
 
