@@ -158,11 +158,13 @@ function formatMessage(results) {
     return { name: item.name, value: item.value, icon }
   })
 
-  const nameWidth = Math.max('Name'.length, ...dataWithIcons.map(item => item.name.length))
+  // Calculate max name width for alignment
+  const nameWidth = Math.max(...dataWithIcons.map(item => item.name.length))
+  const alignmentPos = nameWidth + 2 // +2 for padding after name
 
   const rows = dataWithIcons.map(item => {
-    const nameCell = item.name.padEnd(nameWidth, ' ')
-    return `${item.icon} ${nameCell}  ${item.value}`
+    const nameCell = item.name.padEnd(alignmentPos, ' ')
+    return `${item.icon} ${nameCell}${item.value}`
   })
 
   return [
