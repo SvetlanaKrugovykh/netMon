@@ -133,7 +133,7 @@ async function sendTelegramMessage(text) {
   }
 }
 
-async function runOpticMeasurementsOnce() {
+async function runOpticMeasurementsOnce(dryRun = false) {
   const config = loadMeasurementsConfig()
   if (!config.length) {
     console.error('[OpticDaily] Nothing to measure (empty config)')
@@ -146,12 +146,19 @@ async function runOpticMeasurementsOnce() {
     console.error('[OpticDaily] Nothing to send to Telegram (empty message)')
     return
   }
+  const envDry = (process.env.OPTIC_DRY_RUN || '').toLowerCase() === 'true'
+  if (dryRun || envDry) {
+    console.log('[OpticDaily][DRY-RUN] Message to be sent:')
+    console.log(message)
+    return
+  }
   await sendTelegramMessage(message)
 }
 
 function scheduleNextRun() {
   const { delayMs, next } = msUntilNextRun(DAILY_HOUR, DAILY_MINUTE)
-  console.log('[OpticDaily] Next run scheduled at', next.toISOString())
+  console.log('[OpticDaily] Next run scheduled at (local):', next.toLocaleString())
+  console.log('[OpticDaily] Next run scheduled at (UTC):  ', next.toISOString())
   setTimeout(async () => {
     await runOpticMeasurementsOnce()
     scheduleNextRun()
@@ -163,8 +170,12 @@ function startOpticMeasurementsScheduler() {
     console.log('[OpticDaily] Scheduler disabled via OPTIC_MEASUREMENTS_ENABLED')
     return
   }
+  const now = new Date()
+  console.log('[OpticDaily] Scheduler enabled. Current time (local):', now.toLocaleString())
+  console.log('[OpticDaily] Daily run time (local):', `${String(DAILY_HOUR).padStart(2,'0')}:${String(DAILY_MINUTE).padStart(2,'0')}`)
   if (IMMEDIATE_RUN) {
-    runOpticMeasurementsOnce()
+    console.log('[OpticDaily] IMMEDIATE_RUN is true -> executing once now')
+    runOpticMeasurementsOnce((process.env.OPTIC_DRY_RUN || '').toLowerCase() === 'true')
   }
   scheduleNextRun()
 }
