@@ -194,6 +194,7 @@ async function sendTelegramMessage(text) {
 }
 
 async function runOpticMeasurementsOnce(dryRun = false) {
+  console.log('[OpticDaily] runOpticMeasurementsOnce called with dryRun=', dryRun)
   const config = loadMeasurementsConfig()
   if (!config.length) {
     console.error('[OpticDaily] Nothing to measure (empty config)')
@@ -207,11 +208,13 @@ async function runOpticMeasurementsOnce(dryRun = false) {
     return
   }
   const envDry = (process.env.OPTIC_DRY_RUN || '').toLowerCase() === 'true'
+  console.log('[OpticDaily] dryRun=', dryRun, ', envDry=', envDry, ', OPTIC_DRY_RUN env=', process.env.OPTIC_DRY_RUN)
   if (dryRun || envDry) {
     console.log('[OpticDaily][DRY-RUN] Message to be sent:')
     console.log(message)
     return
   }
+  console.log('[OpticDaily] About to send Telegram message')
   await sendTelegramMessage(message)
 }
 
