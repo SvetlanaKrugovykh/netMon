@@ -207,9 +207,7 @@ async function runOpticMeasurementsOnce(dryRun = false) {
     console.error('[OpticDaily] Nothing to send to Telegram (empty message)')
     return
   }
-  const envDry = (process.env.OPTIC_DRY_RUN || '').toLowerCase() === 'true'
-  console.log('[OpticDaily] dryRun=', dryRun, ', envDry=', envDry, ', OPTIC_DRY_RUN env=', process.env.OPTIC_DRY_RUN)
-  if (dryRun || envDry) {
+  if (dryRun) {
     console.log('[OpticDaily][DRY-RUN] Message to be sent:')
     console.log(message)
     return
