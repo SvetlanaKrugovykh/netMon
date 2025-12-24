@@ -180,19 +180,15 @@ function formatMessage(results) {
 async function sendTelegramMessage(text) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
     console.error('[OpticDaily] Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID')
-    console.error('[OpticDaily] Token present:', !!TELEGRAM_BOT_TOKEN, 'Chat ID present:', !!TELEGRAM_CHAT_ID)
     return
   }
   const apiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`
   try {
-    console.log('[OpticDaily][Telegram] Sending to chat:', TELEGRAM_CHAT_ID)
-    console.log('[OpticDaily][Telegram] Message length:', text.length)
     const response = await sendToChat(apiUrl, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, text)
-    console.log('[OpticDaily][Telegram] Response received:', !!response)
     if (!response) {
       console.error('[OpticDaily] Failed to send Telegram message')
     } else {
-      console.log('[OpticDaily] Message sent successfully')
+      console.log('[OpticDaily] ✅ Measurements sent to Telegram')
     }
   } catch (err) {
     console.error('[OpticDaily] Telegram send error:', err.message || err)
@@ -200,7 +196,6 @@ async function sendTelegramMessage(text) {
 }
 
 async function runOpticMeasurementsOnce(dryRun = false) {
-  console.log('[OpticDaily] runOpticMeasurementsOnce called with dryRun=', dryRun)
   const config = loadMeasurementsConfig()
   if (!config.length) {
     console.error('[OpticDaily] Nothing to measure (empty config)')
@@ -214,11 +209,10 @@ async function runOpticMeasurementsOnce(dryRun = false) {
     return
   }
   if (dryRun) {
-    console.log('[OpticDaily][DRY-RUN] Message to be sent:')
+    console.log('[OpticDaily][DRY-RUN] Message preview:')
     console.log(message)
     return
   }
-  console.log('[OpticDaily] About to send Telegram message')
   await sendTelegramMessage(message)
 }
 
