@@ -1,6 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 const snmp = require('snmp-native')
+const cron = require('node-cron')
 const { runCommand } = require('../utils/commandsOS')
 const { sendToChat } = require('../modules/to_local_DB')
 
@@ -14,7 +15,7 @@ const IMMEDIATE_RUN = process.env.OPTIC_MEASUREMENTS_RUN_IMMEDIATELY === 'true'
 const SNMP_CLIENT_TIMEOUT_SEC = parseInt(process.env.SNMP_CLIENT_TIMEOUT_SEC || '5')
 
 function resolveConfigPath() {
-  // 1) explicit env override (absolute or relative to cwd)
+  // 1) Explicit env override (absolute or relative to cwd)
   const envPath = (process.env.OPTIC_MEASUREMENTS_CONFIG || '').trim()
   if (envPath) {
     const abs = path.isAbsolute(envPath) ? envPath : path.resolve(process.cwd(), envPath)
@@ -25,23 +26,24 @@ function resolveConfigPath() {
       console.error('[OpticDaily] OPTIC_MEASUREMENTS_CONFIG points to missing file:', abs)
     }
   }
-  // 2) local file next to repo (git-ignored)
+  // 2) Local file next to repo (git-ignored)
   const localPath = path.resolve(__dirname, '..', '..', 'data', 'opticMeasurements.local.json')
   if (fs.existsSync(localPath)) {
     console.log('[OpticDaily] Using local config:', localPath)
     return localPath
   }
-  // 3) fallback to sample committed in repo
+  // 3) Fallback to sample committed in repo
   const samplePath = path.resolve(__dirname, '..', '..', 'data', 'opticMeasurements.sample.json')
   if (fs.existsSync(samplePath)) {
     console.log('[OpticDaily] Using sample config:', samplePath)
     return samplePath
   }
-  // 4) not found => return default local path and let reader fail gracefully
+  // 4) Not found => return default local path and let reader fail gracefully
   return localPath
 }
 
 function msUntilNextRun(hour, minute) {
+  // Deprecated - kept for compatibility
   const now = new Date()
   const next = new Date(now.getTime())
   next.setHours(hour, minute, 0, 0)
@@ -217,13 +219,14 @@ async function runOpticMeasurementsOnce(dryRun = false) {
 }
 
 function scheduleNextRun() {
-  const { delayMs, next } = msUntilNextRun(DAILY_HOUR, DAILY_MINUTE)
-  console.log('[OpticDaily] Next run scheduled at (local):', next.toLocaleString())
-  console.log('[OpticDaily] Next run scheduled at (UTC):  ', next.toISOString())
-  setTimeout(async () => {
+  // Schedule for 09:30 daily (server local time)
+  const cronSchedule = '30 9 * * *'
+  console.log('[OpticDaily] Cron scheduler enabled for:', cronSchedule, '(09:30 daily)')
+  
+  cron.schedule(cronSchedule, async () => {
+    console.log('[OpticDaily] Cron triggered at', new Date().toISOString())
     await runOpticMeasurementsOnce()
-    scheduleNextRun()
-  }, delayMs)
+  })
 }
 
 function startOpticMeasurementsScheduler() {
