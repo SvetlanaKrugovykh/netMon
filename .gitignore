@@ -10,4 +10,4 @@ temp/
 .DS_Store
 Thumbs.db
 path
-src/data/opticMeasurements.local.json
+src/data/*Measurements.local.json
