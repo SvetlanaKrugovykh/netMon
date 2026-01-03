@@ -30,6 +30,8 @@ async function runCommand(command, args = [], value = '') {
     console.error(ts, ...args)
   }
 
+  const hasPipeCount = Array.isArray(args) && args.some(a => typeof a === 'string' && a.toLowerCase().includes('| wc -l'))
+
   let fullCommand = command
   const SNMP_DEBUG_LEVEL = parseInt(process.env.SNMP_DEBUG_LEVEL) || 0
   let needRemoteCheck = true
@@ -208,6 +210,14 @@ async function runCommand(command, args = [], value = '') {
           }
           const evalResult = (() => {
             if (!value) {
+              if (hasPipeCount) {
+                const trimmed = (stdout || '').toString().trim()
+                if (SNMP_DEBUG_LEVEL > 1) {
+                  debugLog += `[RETURN] pipe-count stdout: ${trimmed}\n`
+                  logWithTime(`[DEBUG]\n${debugLog}`)
+                }
+                return trimmed
+              }
               return 'Status OK'
             }
             const operStatusMap = {
@@ -298,9 +308,13 @@ async function runCommand(command, args = [], value = '') {
       return result
     }
     if (!value) {
-      if (SNMP_DEBUG_LEVEL > 1) {
-        debugLog += `[RETURN] Status OK (no expected value)\n`
-        logWithTime(`[DEBUG]\n${debugLog}`)
+      if (hasPipeCount) {
+        const trimmed = (stdout || '').toString().trim()
+        if (SNMP_DEBUG_LEVEL > 1) {
+          debugLog += `[RETURN] pipe-count stdout: ${trimmed}\n`
+          logWithTime(`[DEBUG]\n${debugLog}`)
+        }
+        return trimmed
       }
       return 'Status OK'
     }
