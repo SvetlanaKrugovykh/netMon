@@ -14,6 +14,12 @@ const OPTIC_ENABLED = process.env.OPTIC_MEASUREMENTS_ENABLED !== 'false'
 const IMMEDIATE_RUN = process.env.OPTIC_MEASUREMENTS_RUN_IMMEDIATELY === 'true'
 const SNMP_CLIENT_TIMEOUT_SEC = parseInt(process.env.SNMP_CLIENT_TIMEOUT_SEC || '5')
 
+function parseThreshold(value) {
+  if (value === undefined || value === null || value === '') return undefined
+  const num = Number(value)
+  return Number.isFinite(num) ? num : undefined
+}
+
 function resolveConfigPath() {
   // 1) Explicit env override (absolute or relative to cwd)
   const envPath = (process.env.OPTIC_MEASUREMENTS_CONFIG || '').trim()
@@ -53,6 +59,19 @@ function msUntilNextRun(hour, minute) {
   return { delayMs: next.getTime() - now.getTime(), next }
 }
 
+function evaluateStatus(numericValue, min, max) {
+  if (!Number.isFinite(numericValue) || (min === undefined && max === undefined)) {
+    return { icon: '❔', note: '' }
+  }
+  if (min !== undefined && numericValue < min) {
+    return { icon: '🔴', note: 'below min' }
+  }
+  if (max !== undefined && numericValue > max) {
+    return { icon: '🔴', note: 'above max' }
+  }
+  return { icon: '✅', note: '' }
+}
+
 function loadMeasurementsConfig() {
   try {
     const cfgPath = resolveConfigPath()
@@ -68,7 +87,9 @@ function loadMeasurementsConfig() {
         ip_address: item.ip_address,
         oid: item.oid,
         unit: item.unit || '',
-        value: item.value || ''
+        value: item.value || '',
+        min: parseThreshold(item.min),
+        max: parseThreshold(item.max)
       }))
       .filter(item => item.name && item.ip_address && item.oid)
     if (normalized.length === 0) {
@@ -133,11 +154,16 @@ async function collectMeasurements(definitions) {
     }
 
     const cleaned = cleanValue(response)
+    const numericValue = Number.parseFloat(cleaned)
+    const numeric = Number.isFinite(numericValue) ? numericValue : undefined
     const formattedValue = cleaned ? `${cleaned}${item.unit ? ` ${item.unit}` : ''}` : 'n/a'
     results.push({
       name: item.name,
       value: formattedValue,
-      raw: response
+      raw: response,
+      min: item.min,
+      max: item.max,
+      numeric
     })
   }
   return results
@@ -151,13 +177,20 @@ function formatMessage(results) {
 
   // Prepare data with icons
   const dataWithIcons = results.map(item => {
-    let icon = '  '
-    if (item.name.toLowerCase().includes('rx')) {
-      icon = '📥'
-    } else if (item.name.toLowerCase().includes('tx')) {
-      icon = '📤'
-    }
-    return { name: item.name, value: item.value, icon }
+    const directionIcon = item.name.toLowerCase().includes('rx')
+      ? '📥'
+      : item.name.toLowerCase().includes('tx')
+        ? '📤'
+        : '  '
+    const min = parseThreshold(item.min)
+    const max = parseThreshold(item.max)
+    const numeric = Number.isFinite(item.numeric) ? item.numeric : Number.parseFloat(item.value)
+    const status = evaluateStatus(numeric, min, max)
+    const thresholds = []
+    if (min !== undefined) thresholds.push(`min ${min}`)
+    if (max !== undefined) thresholds.push(`max ${max}`)
+    const thresholdText = thresholds.length ? thresholds.join(' / ') : ''
+    return { name: item.name, value: item.value, directionIcon, statusIcon: status.icon, thresholdText }
   })
 
   // Calculate max name width for alignment
@@ -166,7 +199,8 @@ function formatMessage(results) {
 
   const rows = dataWithIcons.map(item => {
     const nameCell = item.name.padEnd(alignmentPos, ' ')
-    return `${item.icon} ${nameCell}${item.value}`
+    const thresholds = item.thresholdText ? `  [${item.thresholdText}]` : ''
+    return `${item.directionIcon} ${item.statusIcon} ${nameCell}${item.value}${thresholds}`
   })
 
   return [
