@@ -3,6 +3,7 @@ const dotenv = require('dotenv')
 const { updateTables } = require('./db/tablesUpdate')
 const authPlugin = require('./plugins/app.auth.plugin')
 const { startOpticMeasurementsScheduler } = require('./services/opticDailyMeasurementsService')
+const { startMainMeasurementsScheduler } = require('./services/mainDailyMeasurementsService')
 
 dotenv.config()
 
@@ -47,6 +48,8 @@ setTimeout(() => {
     try {
       startOpticMeasurementsScheduler()
       console.log('[NetMon] Optic daily measurements scheduler started.')
+      startMainMeasurementsScheduler()
+      console.log('[NetMon] Main daily measurements scheduler started.')
     } catch (err) {
       console.error('[NetMon] Error starting optic measurements scheduler:', err.message)
     }
