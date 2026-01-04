@@ -183,11 +183,9 @@ function formatMessage(results) {
   const rows = dataWithIcons.map(item => {
     const nameCell = item.name.padEnd(alignmentPos, ' ')
     const thresholds = item.thresholdText ? `  [${item.thresholdText}]` : ''
-    // Highlight value in bold for Telegram Markdown (escape % and _)
-    const valueBold = item.value
-      .replace(/([%_])/g, '\\$1') // escape Telegram MarkdownV2 special symbols
-      .replace(/([\[\]()~`>#+\-=|{}.!])/g, '\\$1') // escape additional symbols
-    return `${item.directionIcon} ${item.statusIcon} ${nameCell}**${valueBold}**${thresholds}`
+    // Highlight value in bold for Telegram HTML
+    const valueBold = item.value.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    return `${item.directionIcon} ${item.statusIcon} ${nameCell}<b>${valueBold}</b>${thresholds}`
   })
 
   return {

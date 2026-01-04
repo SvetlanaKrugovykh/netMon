@@ -76,6 +76,7 @@ async function sendToChat(url_address, token, chatId, message) {
       data: {
         chat_id: chatId,
         text: message,
+        parse_mode: 'HTML',
       },
     })
     if (response.status !== 200) {
