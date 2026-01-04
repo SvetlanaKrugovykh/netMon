@@ -200,7 +200,11 @@ function formatMessage(results) {
   const rows = dataWithIcons.map(item => {
     const nameCell = item.name.padEnd(alignmentPos, ' ')
     const thresholds = item.thresholdText ? `  [${item.thresholdText}]` : ''
-    return `${item.directionIcon} ${item.statusIcon} ${nameCell}${item.value}${thresholds}`
+    // Highlight value in bold for Telegram Markdown (escape % and _)
+    const valueBold = item.value
+      .replace(/([%_])/g, '\\$1') // escape Telegram MarkdownV2 special symbols
+      .replace(/([\[\]()~`>#+\-=|{}.!])/g, '\\$1') // escape additional symbols
+    return `${item.directionIcon} ${item.statusIcon} ${nameCell}**${valueBold}**${thresholds}`
   })
 
   return [
