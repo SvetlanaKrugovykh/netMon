@@ -70,7 +70,6 @@ async function sendToChat(url_address, token, chatId, message) {
       url: url_address,
       responseType: 'string',
       headers: {
-        Authorization: token,
         'Content-Type': 'application/json',
       },
       data: {
