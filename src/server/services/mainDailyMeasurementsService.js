@@ -178,25 +178,28 @@ function formatMessage(results) {
         : '  '
     let status, value, thresholdText = ''
     if (item.name.toLowerCase().includes('uptime')) {
-      // Uptime: < 86400
-      if (item.numeric !== undefined && item.numeric < 86400) {
+      let seconds = undefined;
+      if (item.numeric !== undefined) {
+        seconds = item.numeric / 100
+      }
+      if (seconds !== undefined && seconds < 86400) {
         status = { icon: '🔴', note: 'rebooted today' }
         hasAlert = true
       } else {
         status = { icon: '✅', note: '' }
       }
-      value = formatUptime(item.numeric)
+      value = formatUptime(seconds)
     } else {
-      status = evaluateStatus(item.numeric, item.min, item.max)
-      if (status.icon === '🔴') hasAlert = true
-      value = item.value
-      const thresholds = []
-      if (item.min !== undefined) thresholds.push(`min ${item.min}`)
-      if (item.max !== undefined) thresholds.push(`max ${item.max}`)
-      thresholdText = thresholds.length ? thresholds.join(' / ') : ''
+      status = evaluateStatus(item.numeric, item.min, item.max);
+      if (status.icon === '🔴') hasAlert = true;
+      value = item.value;
+      const thresholds = [];
+      if (item.min !== undefined) thresholds.push(`min ${item.min}`);
+      if (item.max !== undefined) thresholds.push(`max ${item.max}`);
+      thresholdText = thresholds.length ? thresholds.join(' / ') : '';
     }
-    return { name: item.name, value, directionIcon, statusIcon: status.icon, thresholdText }
-  })
+    return { name: item.name, value, directionIcon, statusIcon: status.icon, thresholdText };
+  });
 
   const nameWidth = Math.max(...dataWithIcons.map(item => item.name.length))
   const alignmentPos = nameWidth + 2
