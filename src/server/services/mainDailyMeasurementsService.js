@@ -162,19 +162,40 @@ function formatMessage(results) {
   const tsStr = `${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, '0')}-${String(ts.getDate()).padStart(2, '0')} ${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')}`
 
   let hasAlert = false
+  function formatUptime(seconds) {
+    if (!Number.isFinite(seconds)) return 'n/a';
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return `${days} дн ${hours} ч ${minutes} мин`;
+  }
+
   const dataWithIcons = results.map(item => {
     const directionIcon = item.name.toLowerCase().includes('rx')
       ? '📥'
       : item.name.toLowerCase().includes('tx')
         ? '📤'
         : '  '
-    const status = evaluateStatus(item.numeric, item.min, item.max)
-    if (status.icon === '🔴') hasAlert = true
-    const thresholds = []
-    if (item.min !== undefined) thresholds.push(`min ${item.min}`)
-    if (item.max !== undefined) thresholds.push(`max ${item.max}`)
-    const thresholdText = thresholds.length ? thresholds.join(' / ') : ''
-    return { name: item.name, value: item.value, directionIcon, statusIcon: status.icon, thresholdText }
+    let status, value, thresholdText = ''
+    if (item.name.toLowerCase().includes('uptime')) {
+      // Uptime: < 86400
+      if (item.numeric !== undefined && item.numeric < 86400) {
+        status = { icon: '🔴', note: 'rebooted today' }
+        hasAlert = true
+      } else {
+        status = { icon: '✅', note: '' }
+      }
+      value = formatUptime(item.numeric)
+    } else {
+      status = evaluateStatus(item.numeric, item.min, item.max)
+      if (status.icon === '🔴') hasAlert = true
+      value = item.value
+      const thresholds = []
+      if (item.min !== undefined) thresholds.push(`min ${item.min}`)
+      if (item.max !== undefined) thresholds.push(`max ${item.max}`)
+      thresholdText = thresholds.length ? thresholds.join(' / ') : ''
+    }
+    return { name: item.name, value, directionIcon, statusIcon: status.icon, thresholdText }
   })
 
   const nameWidth = Math.max(...dataWithIcons.map(item => item.name.length))
