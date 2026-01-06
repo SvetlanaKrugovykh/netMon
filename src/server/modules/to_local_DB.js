@@ -65,12 +65,14 @@ function delay(ms) {
 async function sendToChat(url_address, token, chatId, message) {
   try {
     await delay(1000)
-    // Escape HTML special characters for Telegram
-    const escapedMessage = message
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-    
+    let textToSend = message
+    // For non-report messages, escape HTML special characters
+    if (typeof message === 'string' && !(message.startsWith('📊 Main Measurements Report') || message.startsWith('📊 Optic Measurements Daily Report'))) {
+      textToSend = message
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+    }
     const response = await axios({
       method: 'post',
       url: url_address,
@@ -80,7 +82,7 @@ async function sendToChat(url_address, token, chatId, message) {
       },
       data: {
         chat_id: chatId,
-        text: escapedMessage,
+        text: textToSend,
         parse_mode: 'HTML',
       },
     })
@@ -90,7 +92,6 @@ async function sendToChat(url_address, token, chatId, message) {
       let answer = response.data.toString()
       return answer
     }
-
   } catch (err) {
     console.error('[sendToChat] Error sending message:', {
       error: err.message,
