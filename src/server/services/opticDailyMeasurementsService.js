@@ -252,6 +252,32 @@ async function runOpticMeasurementsOnce(dryRun = false) {
     return
   }
   await sendTelegramMessage(message)
+  await delay(2000)
+  await sendEvgenyCountdownMessage()
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+}
+function getEvgenyCountdownMessage() {
+  const today = new Date()
+  const fixedToday = new Date(2026, 0, 14) // January is month 0
+  const endDate = new Date(fixedToday)
+  endDate.setDate(endDate.getDate() + 42)
+  const now = new Date()
+  const baseDate = (now.getFullYear() === 2026 && now.getMonth() === 0 && now.getDate() === 14) ? fixedToday : now
+  const msPerDay = 24 * 60 * 60 * 1000
+  const daysLeft = Math.ceil((endDate - baseDate) / msPerDay)
+  if (daysLeft <= 0) {
+    return "🎉 Evgeny's military training is over! Now we are waiting for his return to the team!"
+  }
+  return `🗓️ Still <b>${daysLeft}</b> day${
+		daysLeft === 1 ? "" : "s"
+	} left until Evgeny returns from military training!\nLooking forward to his comeback!`
+}
+
+async function sendEvgenyCountdownMessage() {
+  const text = getEvgenyCountdownMessage()
+  await sendTelegramMessage(text)
 }
 
 function scheduleNextRun() {
