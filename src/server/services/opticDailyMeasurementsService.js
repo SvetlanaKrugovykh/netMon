@@ -221,8 +221,13 @@ async function sendTelegramMessage(text) {
     return
   }
   const apiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`
+  const payload = {
+    chat_id: TELEGRAM_CHAT_ID,
+    text: text,
+    parse_mode: 'HTML'
+  }
   try {
-    const response = await sendToChat(apiUrl, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, text)
+    const response = await sendToChat(apiUrl, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, text, payload)
     if (!response) {
       console.error('[OpticDaily] Failed to send Telegram message')
     } else {
