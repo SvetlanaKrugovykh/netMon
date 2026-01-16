@@ -66,8 +66,9 @@ async function sendToChat(url_address, token, chatId, message) {
   try {
     await delay(1000)
     let textToSend = message
-    // For non-report messages, escape HTML special characters
-    if (typeof message === 'string' && !(message.startsWith('📊 Main Measurements Report') || message.startsWith('📊 Optic Measurements Daily Report'))) {
+    // Do not escape HTML for Evgeny countdown messages
+    const isEvgenyCountdown = typeof message === 'string' && message.includes('days left until Evgeny returns from military training')
+    if (typeof message === 'string' && !(message.startsWith('📊 Main Measurements Report') || message.startsWith('📊 Optic Measurements Daily Report') || isEvgenyCountdown)) {
       textToSend = message
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
