@@ -260,7 +260,7 @@ async function runOpticMeasurementsOnce(dryRun = false) {
   await delay(2000)
   await sendEvgenyCountdownMessage()
 function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
 }
 function getEvgenyCountdownMessage() {
