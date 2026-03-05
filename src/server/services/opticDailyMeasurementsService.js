@@ -271,7 +271,7 @@ function getEvgenyCountdownMessage() {
   endDate.setMonth(endDate.getMonth() + 4)
   const now = new Date();
   // If current date is after endDate, status is over
-  const msPerDay = 24 * 60 * 60 * 1000;
+  const msPerDay = 24 * 60 * 60 * 1000
   const daysLeft = Math.ceil((endDate - now) / msPerDay)
   if (daysLeft <= 0) {
     return "🎉 Evgeny's 'strange status' period is over! Now we are waiting for his return to the team!"
