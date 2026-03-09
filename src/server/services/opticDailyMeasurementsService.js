@@ -276,7 +276,16 @@ function getEvgenyCountdownMessage() {
   if (daysLeft <= 0) {
     return "🎉 Evgeny's 'strange status' period is over! Now we are waiting for his return to the team!"
   }
-  return `🗓️ Still <b>${daysLeft}</b> day${
+  // Convert digits to Unicode bold
+  const boldDigits = String(daysLeft).replace(/\d/g, d => {
+    const map = {
+      '0': '\u{1D7CE}', '1': '\u{1D7CF}', '2': '\u{1D7D0}', '3': '\u{1D7D1}', '4': '\u{1D7D2}',
+      '5': '\u{1D7D3}', '6': '\u{1D7D4}', '7': '\u{1D7D5}', '8': '\u{1D7D6}', '9': '\u{1D7D7}'
+    }
+    return map[d] || d
+  })
+  // Use Unicode bold digits for daysLeft
+  return `🗓️ Still ${boldDigits} day${
     daysLeft === 1 ? "" : "s"
   } left until Evgeny leaves his 'strange status'!\nLooking forward to his comeback!`
 }
