@@ -388,9 +388,19 @@ const scanDropList = async (ips, options = {}) => {
 
 const loadState = (stateFile) => {
 	try {
-		return JSON.parse(fs.readFileSync(stateFile, "utf8"))
+		const raw = fs.readFileSync(stateFile, "utf8")
+		if (!raw.trim()) return {} // файл существует, но пустой — как первый запуск
+		return JSON.parse(raw)
 	} catch (err) {
-		if (err.code === "ENOENT") return {} // первый запуск
+		if (err.code === "ENOENT") return {} // файла ещё нет — первый запуск
+		if (err instanceof SyntaxError) {
+			// файл повреждён/не валидный JSON (например, остался пустым после
+			// прерванного запуска) — не роняем цикл, просто начинаем заново
+			console.warn(
+				`Файл состояния "${stateFile}" повреждён или пуст, начинаю с чистого состояния.`,
+			)
+			return {}
+		}
 		throw err
 	}
 }
