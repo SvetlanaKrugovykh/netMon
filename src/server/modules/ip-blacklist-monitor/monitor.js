@@ -36,6 +36,14 @@ const dns = require("dns").promises
 const fs = require("fs")
 const path = require("path")
 
+// ВАЖНО: НЕ задаём здесь публичные резолверы (1.1.1.1, 8.8.8.8, 9.9.9.9
+// и т.п.) через dns.setServers(). Spamhaus (zen.spamhaus.org) намеренно
+// блокирует запросы, пришедшие через публичные DNS-резолверы, и вместо
+// реального ответа отдаёт код 127.255.255.254 — из-за этого ВСЕ ваши IP
+// начали бы ложно считаться забаненными. Используем системный резолвер
+// сервера (обычно резолвер вашего хостера/ISP) — он бесплатный, без
+// регистрации и без ограничения по времени, и Spamhaus его не блокирует.
+
 // ====================================================================
 // КОНФИГУРАЦИЯ ИЗ ENV (чистая функция без побочных эффектов на вход)
 // ====================================================================
@@ -260,11 +268,20 @@ const scanSubnets = async (options = {}) => {
 
 	const ips = subnetsToIPs(subnets, { excludeReserved })
 	const tasks = ips.flatMap((ip) => zones.map((zone) => [ip, zone]))
+	const total = tasks.length
+	let done = 0
 
+	// options.onProgress(done, total) — опциональный колбэк, чтобы видеть
+	// прогресс во время долгого скана вместо "тишины" на 10+ минут.
 	const results = await runSequentialWithDelay(
 		tasks,
 		requestDelayMs,
-		([ip, zone]) => checkDNSBL(ip, zone, { dnsTimeoutMs, retries }),
+		async ([ip, zone]) => {
+			const result = await checkDNSBL(ip, zone, { dnsTimeoutMs, retries })
+			done += 1
+			if (options.onProgress) options.onProgress(done, total, result)
+			return result
+		},
 	)
 
 	return {
@@ -555,35 +572,42 @@ const sendTelegramMessage = async (text, { token, chatId } = {}) => {
 /**
  * ГЛАВНЫЙ ТРИГГЕР. Принимает результат diffAgainstState (или объект
  * с полями newListings/resolvedListings) и, если есть что сообщать,
- * шлёт сообщение(я) в Telegram. Именно эту функцию вызывайте из
- * своей системы мониторинга сразу после скана/диффа.
+ * шлёт В TELEGRAM ОТДЕЛЬНОЕ СООБЩЕНИЕ НА КАЖДЫЙ IP (не одним общим
+ * текстом), с паузой 2 секунды между каждым сообщением — чтобы не
+ * упереться в rate limit Telegram Bot API и чтобы каждое попадание
+ * было видно как отдельное уведомление, а не потерялось в общем блоке.
  *
  * Пример:
  *   const diff = diffAgainstState(prevState, scanResult.results);
  *   await triggerAlerts(diff);
  */
+const formatSingleNewListingLine = (r) =>
+	`⚠️ ${r.ip} → ${r.zone}${r.reason ? ` (${r.reason})` : ""}`
+
+const formatSingleResolvedLine = (r) =>
+	`✅ ${r.ip} → ${r.zone} (был в списке с ${r.wasListedSince})`
+
 const triggerAlerts = async (
 	{ newListings = [], resolvedListings = [] },
 	options = {},
 ) => {
-	const parts = [
-		formatNewListingsMessage(newListings),
-		formatResolvedMessage(resolvedListings),
-	].filter(Boolean)
+	const items = [
+		...newListings.map((r) => formatSingleNewListingLine(r)),
+		...resolvedListings.map((r) => formatSingleResolvedLine(r)),
+	]
 
-	if (parts.length === 0) {
+	if (items.length === 0) {
 		return { sent: false, reason: "nothing_to_report" }
 	}
 
-	const chunks = splitIntoChunks(parts.join("\n\n"))
-
+	// Пауза 2000мс между КАЖДЫМ отдельным сообщением (по одному IP за раз).
 	const sendResults = await runSequentialWithDelay(
-		chunks,
-		500, // небольшая пауза между частями одного алерта
-		(chunk) => sendTelegramMessage(chunk, options),
+		items,
+		2000,
+		(text) => sendTelegramMessage(text, options),
 	)
 
-	return { sent: true, chunks: chunks.length, sendResults }
+	return { sent: true, count: items.length, sendResults }
 }
 
 // ====================================================================

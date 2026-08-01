@@ -22,7 +22,7 @@
         "<node_internals>/**"
       ],
       "runtimeExecutable": "node",
-      "program": "${workspaceFolder}/src/server/tests/manual/testblkl.js",
+      "program": "${workspaceFolder}/src/server/modules/run-first-cycle.js",
       "runtimeArgs": [
         "--inspect"
       ],
