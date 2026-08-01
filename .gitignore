@@ -11,3 +11,5 @@ temp/
 Thumbs.db
 path
 src/data/*Measurements.local.json
+src/server/data/ip-blacklist-state.json
+src/server/data/testblkl-state.json

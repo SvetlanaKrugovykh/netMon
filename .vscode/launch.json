@@ -17,6 +17,20 @@
     {
       "type": "node",
       "request": "launch",
+      "name": "blacklist_monitor_test",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "runtimeExecutable": "node",
+      "program": "${workspaceFolder}/src/server/tests/manual/testblkl.js",
+      "runtimeArgs": [
+        "--inspect"
+      ],
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "type": "node",
+      "request": "launch",
       "name": "snmp_remote",
       "skipFiles": [
         "<node_internals>/**"
