@@ -3,32 +3,27 @@
 /**
  * ip-blacklist-monitor.js
  * ------------------------------------------------------------------
- * ЧИСТО ФУНКЦИОНАЛЬНЫЙ модуль (без class/this/прототипов) для
- * мониторинга попадания IP из ваших подсетей в DNSBL/RBL и
- * оповещения о НОВЫХ инцидентах в Telegram через Bot API (HTTP POST).
+ * Functional module (without class/this/prototypes) for monitoring IPs from your subnets against DNSBL/RBL and sending alerts about NEW incidents to Telegram via Bot API (HTTP POST). 
  *
- * Логика в двух словах:
- *  1) subnetsToIPs()  — разворачиваем список CIDR (можно указывать
- *     маленькие /28, /27 и т.п., чтобы не гонять пустые адреса) в
- *     плоский список IP.
- *  2) scanSubnets()   — последовательно (не параллельно!) опрашиваем
- *     каждый IP по каждой DNSBL-зоне с фиксированной паузой между
- *     запросами (IPMON_REQUEST_DELAY_MS). Никакого пула воркеров —
- *     просто одна очередь и sleep().
- *  3) diffAgainstState() — сравниваем результат с сохранённым на
- *     диске состоянием и получаем newListings (то, чего не было
- *     в прошлый раз) и resolvedListings (то, что разлистилось).
- *  4) triggerAlerts()  — если newListings/resolvedListings не пустые,
- *     формируем текст и шлём в Telegram-группу через HTTP POST.
- *  5) runMonitoringCycle() — склеивает всё вместе, это единственная
- *     функция, которую вы вызываете по расписанию (cron / systemd
- *     timer / ваша система мониторинга). Внутри модуля никакого
- *     setInterval/cron нет.
+ *  1) subnetsToIPs()  — expand the list of CIDR (you can specify
+ *     small /28, /27, etc., to avoid querying empty addresses) into
+ *     a flat list of IPs.
+ *  2) scanSubnets()   — sequentially (not in parallel!) query
+ *     each IP against each DNSBL zone with a fixed delay between
+ *     requests (IPMON_REQUEST_DELAY_MS). No worker pool —
+ *     just a single queue and sleep().
+ *  3) diffAgainstState() — compare the result with the state saved on
+ *     disk and get newListings (what was not there last time) and resolvedListings (what has been delisted).
+ *  4) triggerAlerts()  — if newListings/resolvedListings are not empty,
+ *     format the text and send it to the Telegram group via HTTP POST.
+ *  5) runMonitoringCycle() — puts everything together, this is the only
+ *     function you call on a schedule (cron / systemd
+ *     timer / your monitoring system). There is no setInterval/cron inside the module.
  *
- * AbuseIPDB-проверка оставлена в файле как ПОЛНОСТЬЮ опциональный
- * кусок: без ключа в env она просто не выполняется. Никаких платных
- * токенов для работы модуля не требуется — вся основная логика
- * работает только на бесплатных DNS-запросах к DNSBL-зонам.
+ * AbuseIPDB-check is left in the file as a FULLY optional
+ * piece: without a key in env it simply does not run. No paid
+ * tokens are required for the module to work — all the main logic
+ * works only on free DNS queries to DNSBL zones.
  * ------------------------------------------------------------------
  */
 
@@ -36,17 +31,14 @@ const dns = require("dns").promises
 const fs = require("fs")
 const path = require("path")
 
-// ВАЖНО: НЕ задаём здесь публичные резолверы (1.1.1.1, 8.8.8.8, 9.9.9.9
-// и т.п.) через dns.setServers(). Spamhaus (zen.spamhaus.org) намеренно
-// блокирует запросы, пришедшие через публичные DNS-резолверы, и вместо
-// реального ответа отдаёт код 127.255.255.254 — из-за этого ВСЕ ваши IP
-// начали бы ложно считаться забаненными. Используем системный резолвер
-// сервера (обычно резолвер вашего хостера/ISP) — он бесплатный, без
-// регистрации и без ограничения по времени, и Spamhaus его не блокирует.
+// IMPORTANT: DO NOT set public resolvers here (1.1.1.1, 8.8.8.8, 9.9.9.9
+// etc.) via dns.setServers(). Spamhaus (zen.spamhaus.org) intentionally
+// blocks requests coming through public DNS resolvers, and instead of
+// the real response returns the code 127.255.255.254 — because of this ALL your IPs
+// would be falsely considered banned. Use the system resolver of the server
+// (usually your hoster/ISP resolver) — it is free, without registration,
+// without time limits, and Spamhaus does not block it.
 
-// ====================================================================
-// КОНФИГУРАЦИЯ ИЗ ENV (чистая функция без побочных эффектов на вход)
-// ====================================================================
 
 const DEFAULT_DNSBL_ZONES = [
 	"zen.spamhaus.org",
@@ -64,10 +56,8 @@ const splitEnvList = (value, fallback) =>
 		.filter(Boolean)
 
 const getConfig = () => ({
-	// Список подсетей. Можно указывать И большие /24 и /23, И маленькие
-	// /28 (255.255.255.240) / /27 (255.255.255.224) — если вы знаете,
-	// какие конкретные блоки реально заняты абонентами, просто
-	// перечислите их здесь через запятую, а не весь /24 или /23 целиком.
+	// Networks list. /24 и /23, or
+	// /28 (255.255.255.240) / /27 (255.255.255.224) — to avoid querying empty addresses.
 	subnets: splitEnvList(
 		process.env.IPMON_SUBNETS,
 		"91.220.106.0/24,176.124.138.0/23",
@@ -78,19 +68,12 @@ const getConfig = () => ({
 		DEFAULT_DNSBL_ZONES.join(","),
 	),
 
-	// Пауза между КАЖДЫМ отдельным DNS-запросом, мс. Это единственный
-	// регулятор нагрузки — без всякого concurrency-пула.
 	requestDelayMs: parseInt(process.env.IPMON_REQUEST_DELAY_MS || "200", 10),
 
 	dnsTimeoutMs: parseInt(process.env.IPMON_DNS_TIMEOUT_MS || "4000", 10),
 	retries: parseInt(process.env.IPMON_RETRIES || "1", 10),
 	excludeReserved: (process.env.IPMON_EXCLUDE_RESERVED || "true") === "true",
 
-	// Дефолт рассчитан на размещение файла модуля по пути
-	// src/server/modules/ip-blacklist-monitor/monitor.js — тогда
-	// ../../data/ указывает на src/server/data/. Если ваш модуль лежит
-	// в другом месте — просто задайте IPMON_STATE_FILE в .env явно,
-	// он всегда имеет приоритет над этим дефолтом.
 	stateFile:
 		process.env.IPMON_STATE_FILE ||
 		path.join(__dirname, "../../data/dnsbl-state.json"),
@@ -100,9 +83,9 @@ const getConfig = () => ({
 	telegramChatId: process.env.IPMON_TELEGRAM_CHAT_ID || "",
 	telegramAutoSend: (process.env.IPMON_TELEGRAM_AUTOSEND || "true") === "true",
 
-	// --- Spamhaus DROP/EDROP (бесплатно, без ключа, разрешено к автоматическому
-	// скачиванию самой Spamhaus — их условие: не чаще 1 раза в час,
-	// рекомендуют раз в сутки; поэтому используем локальный кэш-файл) ---
+	// --- Spamhaus DROP/EDROP (free, no key required, officially allowed for automatic
+	// download by Spamhaus — their rule: no more than once per hour,
+	// recommended once per day; therefore we use a local cache file) ---
 	dropEnabled: (process.env.IPMON_DROP_ENABLED || "true") === "true",
 	dropUrl:
 		process.env.IPMON_DROP_URL || "https://www.spamhaus.org/drop/drop.txt",
@@ -124,7 +107,7 @@ const getConfig = () => ({
 })
 
 // ====================================================================
-// CIDR -> список IP (чистые функции)
+// CIDR -> list of IPs (pure functions)
 // ====================================================================
 
 const ipToLong = (ip) =>
@@ -161,10 +144,10 @@ const subnetsToIPs = (subnets, opts = {}) => [
 ]
 
 /**
- * Проверяет, попадает ли конкретный IP в CIDR-диапазон.
- * Нужна для списков типа Spamhaus DROP, где публикуются не отдельные
- * IP, а целые "плохие" сети (например, "5.42.92.0/24") — там нельзя
- * просто резолвить DNS, нужно самим проверить вхождение в диапазон.
+ * Checks if a specific IP falls within a CIDR range.
+ * Needed for lists like Spamhaus DROP, where not individual IPs are published,
+ * but entire "bad" networks (e.g., "5.42.92.0/24") — you can't just resolve DNS,
+ * you need to check the range yourself.
  */
 const ipInCidr = (ip, cidr) => {
 	const [netIpPart, bitsPart] = cidr.split("/")
@@ -174,16 +157,15 @@ const ipInCidr = (ip, cidr) => {
 }
 
 // ====================================================================
-// ПОСЛЕДОВАТЕЛЬНЫЙ ЗАПУСК С ПАУЗОЙ (вместо пула воркеров)
+// SEQUENTIAL EXECUTION WITH DELAY (instead of a worker pool)
 // ====================================================================
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
- * Выполняет fn(item) для каждого item ПО ОЧЕРЕДИ (не параллельно),
- * с паузой delayMs после каждого вызова. Именно это и есть тот самый
- * "тупой интервал между запросами", который вы просили — просто и
- * предсказуемо по нагрузке.
+ * Executes fn(item) for each item SEQUENTIALLY (not in parallel),
+ * with a delay of delayMs after each call. This is the "dumb interval between requests"
+ * that you asked for — simple and predictable in terms of load.
  */
 const runSequentialWithDelay = (items, delayMs, fn) =>
 	items.reduce(
@@ -212,7 +194,7 @@ const withTimeout = (promise, ms, timeoutError = { code: "ETIMEDOUT" }) =>
 	})
 
 // ====================================================================
-// ПРОВЕРКА ОДНОГО IP ПО ОДНОЙ DNSBL-ЗОНЕ
+// CHECKING A SINGLE IP AGAINST A SINGLE DNSBL ZONE
 // ====================================================================
 
 const checkDNSBL = async (ip, zone, opts = {}) => {
@@ -254,7 +236,7 @@ const checkDNSBL = async (ip, zone, opts = {}) => {
 }
 
 // ====================================================================
-// СКАНИРОВАНИЕ ВСЕХ ПОДСЕТЕЙ ПО ВСЕМ ЗОНАМ (последовательно, с паузой)
+// SCANNING ALL SUBNETS AGAINST ALL ZONES (sequentially, with a delay)
 // ====================================================================
 
 const scanSubnets = async (options = {}) => {
@@ -271,8 +253,8 @@ const scanSubnets = async (options = {}) => {
 	const total = tasks.length
 	let done = 0
 
-	// options.onProgress(done, total) — опциональный колбэк, чтобы видеть
-	// прогресс во время долгого скана вместо "тишины" на 10+ минут.
+	// options.onProgress(done, total) — optional callback to track
+	// progress during a long scan instead of silence for 10+ minutes.
 	const results = await runSequentialWithDelay(
 		tasks,
 		requestDelayMs,
@@ -294,17 +276,17 @@ const scanSubnets = async (options = {}) => {
 }
 
 // ====================================================================
-// SPAMHAUS DROP/EDROP — список "плохих" СЕТЕЙ (не отдельных IP),
-// бесплатный, без ключа, официально разрешён к автоматическому
-// скачиванию (см. https://www.spamhaus.org/drop/). Правило Spamhaus:
-// не скачивать чаще 1 раза в час, лучше раз в сутки — поэтому кэшируем
-// в файл и качаем заново только когда кэш устарел.
+// SPAMHAUS DROP/EDROP — list of "bad" NETWORKS (not individual IPs),
+// free, no key required, officially allowed for automatic
+// download (see https://www.spamhaus.org/drop/). Spamhaus rule:
+// do not download more than once per hour, preferably once per day — therefore we cache
+// to a file and download again only when the cache is outdated.
 // ====================================================================
 
 /**
- * Разбирает текстовый формат drop.txt:
+ * Parses the text format of drop.txt:
  *   "5.42.92.0/24 ; SBL625300"
- * Строки, начинающиеся с ";", — комментарии, пропускаем.
+ * Lines starting with ";" are comments and are skipped.
  */
 const parseDropText = (text) =>
 	text
@@ -317,7 +299,7 @@ const parseDropText = (text) =>
 		})
 		.filter((entry) => entry.cidr && entry.cidr.includes("/"))
 
-/** Скачивает drop.txt. Требует Node.js >= 18 (глобальный fetch). */
+/** Downloads drop.txt. Requires Node.js >= 18 (global fetch). */
 const fetchDropListRaw = async (url) => {
 	const resp = await fetch(url)
 	if (!resp.ok) throw new Error(`http_${resp.status}`)
@@ -325,9 +307,9 @@ const fetchDropListRaw = async (url) => {
 }
 
 /**
- * Отдаёт список DROP-записей, используя локальный кэш-файл. Если кэш
- * младше maxAgeHours — читает из файла, без похода в сеть. Если
- * устарел (или файла ещё нет) — скачивает заново и обновляет кэш.
+ * Returns the list of DROP entries, using a local cache file. If the cache
+ * is younger than maxAgeHours — reads from the file, without going to the network. If
+ * it is outdated (or the file does not exist yet) — downloads again and updates the cache.
  */
 const loadDropList = async (options = {}) => {
 	const cfg = getConfig()
@@ -342,7 +324,7 @@ const loadDropList = async (options = {}) => {
 			return parseDropText(fs.readFileSync(cacheFile, "utf8"))
 		}
 	} catch (_) {
-		// кэша ещё нет — качаем в первый раз
+		// cache does not exist yet — download for the first time
 	}
 
 	const text = await fetchDropListRaw(url)
@@ -350,7 +332,6 @@ const loadDropList = async (options = {}) => {
 	return parseDropText(text)
 }
 
-/** Проверяет один IP на вхождение в список DROP-сетей (без сети, чистая логика). */
 const checkAgainstDropEntries = (ip, dropEntries) => {
 	const match = dropEntries.find((entry) => ipInCidr(ip, entry.cidr))
 	return match
@@ -359,10 +340,10 @@ const checkAgainstDropEntries = (ip, dropEntries) => {
 }
 
 /**
- * Проверяет список IP на вхождение в Spamhaus DROP и приводит
- * результат к ТОЙ ЖЕ форме, что возвращает checkDNSBL() — с полем
- * zone:"spamhaus.DROP" — чтобы diffAgainstState() отработал их
- * одинаково, без отдельной логики.
+ * Checks a list of IPs against the Spamhaus DROP and returns
+ * the result in THE SAME format as checkDNSBL() — with the field
+ * zone:"spamhaus.DROP" — so that diffAgainstState() handles them
+ * the same way, without separate logic.
  */
 const scanDropList = async (ips, options = {}) => {
 	const dropEntries = await loadDropList(options)
@@ -383,7 +364,7 @@ const scanDropList = async (ips, options = {}) => {
 }
 
 // ====================================================================
-// СОСТОЯНИЕ (файл) И DIFF — тут решается, что "новое", а что не новое
+// STATE (file) AND DIFF — here we determine what is "new" and what is not
 // ====================================================================
 
 const loadState = (stateFile) => {
@@ -412,19 +393,19 @@ const saveState = (stateFile, state) => {
 }
 
 /**
- * Сравнивает текущие результаты скана с прошлым состоянием.
- * Реализовано через reduce (без циклов/мутации), возвращает:
- *  - newListings      — стали listed:true, раньше не были. АЛЕРТ.
- *  - resolvedListings — были listed:true, теперь чисты.
- *  - stillListed      — были и остаются listed:true (без повторного алерта).
- *  - nextState        — для saveState().
+ * Compares the current scan results with the previous state.
+ * Implemented using reduce (no loops/mutation), returns:
+ *  - newListings      — became listed:true, were not before. ALERT.
+ *  - resolvedListings — were listed:true, now clean.
+ *  - stillListed      — were and remain listed:true (no repeated alert).
+ *  - nextState        — for saveState().
  *
- * ВАЖНО: если это самый первый запуск (файла состояния не было),
- * ВСЕ текущие попадания попадут в newListings — это ожидаемо, а не
- * баг: модуль ещё не знал про них "раньше".
- * Проверки с listed:null (сбой DNS/таймаут) в диффе не участвуют —
- * история по такому ключу просто переносится как есть, чтобы
- * временный сбой резолвера не выглядел как "разлистился".
+ * IMPORTANT: if this is the very first run (no state file exists),
+ * ALL current hits will appear in newListings — this is expected, not
+ * a bug: the module did not know about them "before".
+ * Checks with listed:null (DNS failure/timeout) do not participate in the diff —
+ * the history for such a key is simply carried over as is, so that
+ * a temporary resolver failure does not look like "resolved".
  */
 const diffAgainstState = (prevState, scanResults) => {
 	const initial = {
@@ -507,7 +488,7 @@ const diffAgainstState = (prevState, scanResults) => {
 }
 
 // ====================================================================
-// TELEGRAM-ТРИГГЕР (HTTP POST в Bot API, токен уже в env)
+// TELEGRAM TRIGGER (HTTP POST to Bot API, token already in env)
 // ====================================================================
 
 const escapeForTelegram = (text) => text // используем обычный текст без разметки, спецсимволы не нужно экранировать
@@ -529,9 +510,9 @@ const formatResolvedMessage = (resolvedListings) => {
 }
 
 /**
- * Режем длинный текст на части не больше maxLen символов, стараясь
- * резать по границам строк (у Telegram лимит 4096 символов на
- * сообщение, берём с запасом 3500).
+ * Splits a long text into chunks no longer than maxLen characters, trying
+ * to split on line boundaries (Telegram has a limit of 4096 characters per
+ * message, we take 3500 to be safe).
  */
 const splitIntoChunks = (text, maxLen = 3500) =>
 	text.split("\n").reduce((chunks, line) => {
@@ -543,10 +524,10 @@ const splitIntoChunks = (text, maxLen = 3500) =>
 	}, [])
 
 /**
- * Отправляет ОДНО сообщение в Telegram через Bot API HTTP POST.
- * Токен и chat_id берутся из env (getConfig), либо можно передать
- * явно вторым аргументом — удобно для тестов.
- * Требует Node.js >= 18 (глобальный fetch).
+ * Sends ONE message to Telegram via Bot API HTTP POST.
+ * The token and chat_id are taken from env (getConfig), or can be passed
+ * explicitly as the second argument — convenient for tests.
+ * Requires Node.js >= 18 (global fetch).
  */
 const sendTelegramMessage = async (text, { token, chatId } = {}) => {
 	const cfg = getConfig()
@@ -580,12 +561,12 @@ const sendTelegramMessage = async (text, { token, chatId } = {}) => {
 }
 
 /**
- * ГЛАВНЫЙ ТРИГГЕР. Принимает результат diffAgainstState (или объект
- * с полями newListings/resolvedListings) и, если есть что сообщать,
- * шлёт В TELEGRAM ОТДЕЛЬНОЕ СООБЩЕНИЕ НА КАЖДЫЙ IP (не одним общим
- * текстом), с паузой 2 секунды между каждым сообщением — чтобы не
- * упереться в rate limit Telegram Bot API и чтобы каждое попадание
- * было видно как отдельное уведомление, а не потерялось в общем блоке.
+ * MAIN TRIGGER. Accepts the result of diffAgainstState (or an object
+ * with newListings/resolvedListings) and, if there is something to report,
+ * sends a SEPARATE MESSAGE TO TELEGRAM FOR EACH IP (not a single combined
+ * message), with a 2-second pause between each message — to avoid hitting
+ * the Telegram Bot API rate limit and to ensure each hit is visible as a
+ * separate notification, rather than getting lost in the general block.
  *
  * Пример:
  *   const diff = diffAgainstState(prevState, scanResult.results);
@@ -621,9 +602,9 @@ const triggerAlerts = async (
 }
 
 // ====================================================================
-// AbuseIPDB — ПОЛНОСТЬЮ ОПЦИОНАЛЬНО, БЕЗ КЛЮЧА ПРОСТО НЕ РАБОТАЕТ.
-// Никакой платный токен не требуется для работы модуля в целом —
-// это дополнительная возможность "если вдруг понадобится".
+// AbuseIPDB — FULLY OPTIONAL, DOES NOT WORK WITHOUT A KEY.
+// No paid token is required for the module to work in general —
+// this is an additional feature "if needed".
 // ====================================================================
 
 const checkAbuseIPDB = async (ip, apiKey, { threshold = 25 } = {}) => {
@@ -673,7 +654,7 @@ const scanAbuseIPDB = async (ips, options = {}) => {
 }
 
 // ====================================================================
-// ГЛАВНАЯ ФУНКЦИЯ ДЛЯ ВСТРАИВАНИЯ В СИСТЕМУ МОНИТОРИНГА
+// MAIN FUNCTION FOR INTEGRATION INTO THE MONITORING SYSTEM
 // ====================================================================
 
 /**
@@ -687,10 +668,10 @@ const runMonitoringCycle = async (overrides = {}) => {
 
 	const scan = await scanSubnets(overrides)
 
-	// Spamhaus DROP — те же самые IP, что и в scanSubnets, но проверка
-	// по-другому (вхождение в CIDR, не DNS-запрос). Если скачивание
-	// списка не удалось (сеть/сайт недоступен) — не роняем весь цикл,
-	// просто помечаем dropError и идём дальше без этих результатов.
+	// Spamhaus DROP — the same IPs as in scanSubnets, but the check
+	// is done differently (CIDR inclusion, not a DNS query). If downloading
+	// the list fails (network/site unavailable) — we do not break the whole cycle,
+	// just mark dropError and continue without these results.
 	let dropResults = []
 	let dropError = null
 	if (cfg.dropEnabled) {
@@ -717,8 +698,8 @@ const runMonitoringCycle = async (overrides = {}) => {
 		telegramResult = await triggerAlerts(diff)
 	}
 
-	// AbuseIPDB — выполняется ТОЛЬКО если явно задан ключ в env.
-	// Если ключа нет (ваш случай по умолчанию) — просто skipped:true.
+	// AbuseIPDB — executed ONLY if an API key is explicitly set in env.
+	// If there is no key (your default case) — just skipped:true.
 	const abuseIpDb = cfg.abuseIpDbKey
 		? await scanAbuseIPDB([...new Set(diff.newListings.map((r) => r.ip))])
 		: { skipped: true, reason: "no_api_key" }
@@ -739,7 +720,7 @@ const runMonitoringCycle = async (overrides = {}) => {
 }
 
 // ====================================================================
-// ЭКСПОРТ (только функции и константы, никакого class)
+// EXPORT (only functions and constants, no class)
 // ====================================================================
 
 module.exports = {
@@ -768,26 +749,19 @@ module.exports = {
 
 /**
  * ====================================================================
- * ПРИМЕР ИСПОЛЬЗОВАНИЯ (комментарий, ничего не выполняется)
+ * EXAMPLE USAGE (comment, does not execute)
  * ====================================================================
  *
  * const { runMonitoringCycle } = require('./ip-blacklist-monitor');
  *
  * async function tick() {
  *   const summary = await runMonitoringCycle();
- *   console.log(`Проверено ${summary.totalChecks} комбинаций IP/зона`);
- *   console.log(`Новых попаданий: ${summary.newListings.length}`);
+ *   console.log(`Checked ${summary.totalChecks} IP/zones`);
+ *   console.log(`New listings: ${summary.newListings.length}`);
  *   if (summary.failedChecks.length > 20) {
- *     // много сбоев подряд — возможно резолвер режет/недоступен
- *     console.warn('Много неудачных проверок:', summary.failedChecks.length);
+ *      console.warn('So many failed checks:', summary.failedChecks.length);
  *   }
  * }
  *
- * // раз в час:
- * // const cron = require('node-cron');
- * // cron.schedule('0 * * * *', tick);
- *
- * // раз в 2 часа:
- * // cron.schedule('0 *\/2 * * *', tick);
  * ====================================================================
  */

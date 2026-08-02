@@ -4,6 +4,7 @@ const snmp = require('snmp-native')
 const cron = require('node-cron')
 const { runCommand } = require('../utils/commandsOS')
 const { sendToChat } = require('../modules/to_local_DB')
+const { runMonitoringCycle } = require('../modules/ip-blacklist-monitor/monitor')
 
 const CRON_SCHEDULE = process.env.MAIN_MEASUREMENTS_CRON || '0 */3 * * *'
 const MAIN_COMMUNITY = process.env.MAIN_SNMP_COMMUNITY || 'public'
@@ -283,11 +284,38 @@ async function runMainMeasurementsOnce(dryRun = false) {
   await sendTelegramMessage(message)
 }
 
+let isBlacklistCheckRunning = false
+
+async function runBlacklistCheckIfDaytime() {
+  if (isQuietHours()) {
+    console.log('[MainDaily] Тихие часы -> проверку блэклистов пропускаю')
+    return
+  }
+  if (isBlacklistCheckRunning) {
+    // Blacklist check can really take 40-60+ minutes. If the previous
+    // cycle has not finished by the time the next cron trigger occurs —
+    // just skip this trigger, instead of starting a second process on top.
+    console.log('[MainDaily] Previous blacklist check cycle has not finished yet -> skipping')
+    return
+  }
+  isBlacklistCheckRunning = true
+  console.log('[MainDaily] Starting blacklist check cycle (daytime)')
+  try {
+    await runMonitoringCycle()
+    console.log('[MainDaily] Cycles of blacklist check completed')
+  } catch (err) {
+    console.error('[MainDaily] Error during blacklist check cycle:', err.message || err)
+  } finally {
+    isBlacklistCheckRunning = false
+  }
+}
+
 function scheduleNextRun() {
   console.log('[MainDaily] Cron scheduler enabled for:', CRON_SCHEDULE)
   cron.schedule(CRON_SCHEDULE, async () => {
     console.log('[MainDaily] Cron triggered at', new Date().toISOString())
     await runMainMeasurementsOnce()
+    await runBlacklistCheckIfDaytime()
   })
 }
 
