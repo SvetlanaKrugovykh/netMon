@@ -3,27 +3,28 @@
 /**
  * ip-blacklist-monitor.js
  * ------------------------------------------------------------------
- * Functional module (without class/this/prototypes) for monitoring IPs from your subnets against DNSBL/RBL and sending alerts about NEW incidents to Telegram via Bot API (HTTP POST). 
+ * Pure functional module (no class/this/prototypes) for monitoring
+ * your subnets against DNSBL/RBL zones and alerting on NEW incidents
+ * via the Telegram Bot API (HTTP POST).
  *
- *  1) subnetsToIPs()  — expand the list of CIDR (you can specify
- *     small /28, /27, etc., to avoid querying empty addresses) into
- *     a flat list of IPs.
- *  2) scanSubnets()   — sequentially (not in parallel!) query
- *     each IP against each DNSBL zone with a fixed delay between
- *     requests (IPMON_REQUEST_DELAY_MS). No worker pool —
- *     just a single queue and sleep().
- *  3) diffAgainstState() — compare the result with the state saved on
- *     disk and get newListings (what was not there last time) and resolvedListings (what has been delisted).
- *  4) triggerAlerts()  — if newListings/resolvedListings are not empty,
- *     format the text and send it to the Telegram group via HTTP POST.
- *  5) runMonitoringCycle() — puts everything together, this is the only
- *     function you call on a schedule (cron / systemd
- *     timer / your monitoring system). There is no setInterval/cron inside the module.
+ * Flow:
+ *  1) subnetsToIPs()  — expands a list of CIDRs (small /28, /27, etc.
+ *     are fine — no need to scan empty ranges) into a flat IP list.
+ *  2) scanSubnets()   — sequentially (NOT in parallel!) queries every
+ *     IP against every DNSBL zone with a fixed delay between requests
+ *     (IPMON_REQUEST_DELAY_MS). No worker pool — just a queue + sleep().
+ *  3) diffAgainstState() — compares the scan result against the saved
+ *     state file and produces newListings (not present last time) and
+ *     resolvedListings (delisted since last time).
+ *  4) triggerAlerts()  — if newListings/resolvedListings are non-empty,
+ *     sends one Telegram message per IP.
+ *  5) runMonitoringCycle() — wires everything together; this is the
+ *     only function you call on a schedule (cron / systemd timer /
+ *     your own scheduler). No setInterval/cron inside the module itself.
  *
- * AbuseIPDB-check is left in the file as a FULLY optional
- * piece: without a key in env it simply does not run. No paid
- * tokens are required for the module to work — all the main logic
- * works only on free DNS queries to DNSBL zones.
+ * AbuseIPDB support is fully optional: without an API key it's simply
+ * skipped. No paid token is required for the module to work — the
+ * core logic only relies on free DNS queries against DNSBL zones.
  * ------------------------------------------------------------------
  */
 
@@ -31,14 +32,29 @@ const dns = require("dns").promises
 const fs = require("fs")
 const path = require("path")
 
-// IMPORTANT: DO NOT set public resolvers here (1.1.1.1, 8.8.8.8, 9.9.9.9
-// etc.) via dns.setServers(). Spamhaus (zen.spamhaus.org) intentionally
-// blocks requests coming through public DNS resolvers, and instead of
-// the real response returns the code 127.255.255.254 — because of this ALL your IPs
-// would be falsely considered banned. Use the system resolver of the server
-// (usually your hoster/ISP resolver) — it is free, without registration,
-// without time limits, and Spamhaus does not block it.
+// IMPORTANT: do NOT point this at public resolvers (1.1.1.1, 8.8.8.8,
+// 9.9.9.9, etc.) via dns.setServers(). Spamhaus (zen.spamhaus.org)
+// deliberately blocks queries coming through public DNS resolvers and
+// returns an error code (127.255.255.254) instead of a real answer —
+// which used to make every IP look falsely "listed". By default we
+// rely on the OS-level resolver of the host. If that resolver itself
+// turns out to be a public one (common on some VPS/containers), point
+// it explicitly at your own local recursive resolver, e.g.:
+//   dns.setServers(["127.0.0.1"])
+// if you run your own BIND/Unbound/etc. on the same machine. See the
+// IPMON_DNS_SERVERS env var below for a config-driven way to do this
+// without editing the file.
+const configuredDnsServers = (process.env.IPMON_DNS_SERVERS || "")
+	.split(",")
+	.map((s) => s.trim())
+	.filter(Boolean)
+if (configuredDnsServers.length > 0) {
+	dns.setServers(configuredDnsServers)
+}
 
+// ====================================================================
+// CONFIG FROM ENV (pure function, no side effects on read)
+// ====================================================================
 
 const DEFAULT_DNSBL_ZONES = [
 	"zen.spamhaus.org",
@@ -56,8 +72,10 @@ const splitEnvList = (value, fallback) =>
 		.filter(Boolean)
 
 const getConfig = () => ({
-	// Networks list. /24 и /23, or
-	// /28 (255.255.255.240) / /27 (255.255.255.224) — to avoid querying empty addresses.
+	// List of subnets. You can mix large /24, /23 ranges with small
+	// /28 (255.255.255.240) / /27 (255.255.255.224) blocks — if you
+	// know exactly which small blocks are actually occupied by
+	// subscribers, list just those instead of the whole /24 or /23.
 	subnets: splitEnvList(
 		process.env.IPMON_SUBNETS,
 		"91.220.106.0/24,176.124.138.0/23",
@@ -68,12 +86,19 @@ const getConfig = () => ({
 		DEFAULT_DNSBL_ZONES.join(","),
 	),
 
+	// Delay between EVERY single DNS request, in ms. This is the only
+	// load control knob — there is no concurrency pool.
 	requestDelayMs: parseInt(process.env.IPMON_REQUEST_DELAY_MS || "200", 10),
 
 	dnsTimeoutMs: parseInt(process.env.IPMON_DNS_TIMEOUT_MS || "4000", 10),
 	retries: parseInt(process.env.IPMON_RETRIES || "1", 10),
 	excludeReserved: (process.env.IPMON_EXCLUDE_RESERVED || "true") === "true",
 
+	// Default assumes the module lives at
+	// src/server/modules/ip-blacklist-monitor/monitor.js — then
+	// ../../data/ points at src/server/data/. If your module lives
+	// elsewhere, just set IPMON_STATE_FILE explicitly in .env; it
+	// always takes priority over this default.
 	stateFile:
 		process.env.IPMON_STATE_FILE ||
 		path.join(__dirname, "../../data/dnsbl-state.json"),
@@ -83,9 +108,10 @@ const getConfig = () => ({
 	telegramChatId: process.env.IPMON_TELEGRAM_CHAT_ID || "",
 	telegramAutoSend: (process.env.IPMON_TELEGRAM_AUTOSEND || "true") === "true",
 
-	// --- Spamhaus DROP/EDROP (free, no key required, officially allowed for automatic
-	// download by Spamhaus — their rule: no more than once per hour,
-	// recommended once per day; therefore we use a local cache file) ---
+	// --- Spamhaus DROP/EDROP (free, no key, explicitly allowed for
+	// automated download by Spamhaus themselves — their condition:
+	// no more than once per hour, once per day recommended, hence
+	// the local cache file below) ---
 	dropEnabled: (process.env.IPMON_DROP_ENABLED || "true") === "true",
 	dropUrl:
 		process.env.IPMON_DROP_URL || "https://www.spamhaus.org/drop/drop.txt",
@@ -94,7 +120,7 @@ const getConfig = () => ({
 		path.join(__dirname, "../../data/spamhaus-drop-cache.txt"),
 	dropMaxAgeHours: parseInt(process.env.IPMON_DROP_MAX_AGE_HOURS || "24", 10),
 
-	// --- AbuseIPDB (полностью опционально, без ключа не используется) ---
+	// --- AbuseIPDB (fully optional, unused without a key) ---
 	abuseIpDbKey: process.env.IPMON_ABUSEIPDB_KEY || "",
 	abuseIpDbThreshold: parseInt(
 		process.env.IPMON_ABUSEIPDB_THRESHOLD || "25",
@@ -122,7 +148,7 @@ const cidrToIPs = (cidr, { excludeReserved = true } = {}) => {
 	const [ipPart, bitsPart] = cidr.split("/")
 	const bits = parseInt(bitsPart, 10)
 	if (!ipPart || Number.isNaN(bits) || bits < 0 || bits > 32) {
-		throw new Error(`Некорректный CIDR: "${cidr}"`)
+		throw new Error(`Invalid CIDR: "${cidr}"`)
 	}
 
 	const ipLong = ipToLong(ipPart)
@@ -144,10 +170,10 @@ const subnetsToIPs = (subnets, opts = {}) => [
 ]
 
 /**
- * Checks if a specific IP falls within a CIDR range.
- * Needed for lists like Spamhaus DROP, where not individual IPs are published,
- * but entire "bad" networks (e.g., "5.42.92.0/24") — you can't just resolve DNS,
- * you need to check the range yourself.
+ * Checks whether a given IP falls inside a CIDR range. Needed for
+ * lists like Spamhaus DROP, which publish whole "bad" networks
+ * (e.g. "5.42.92.0/24") rather than individual IPs — those can't be
+ * resolved via DNS, membership has to be checked manually.
  */
 const ipInCidr = (ip, cidr) => {
 	const [netIpPart, bitsPart] = cidr.split("/")
@@ -163,9 +189,9 @@ const ipInCidr = (ip, cidr) => {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
- * Executes fn(item) for each item SEQUENTIALLY (not in parallel),
- * with a delay of delayMs after each call. This is the "dumb interval between requests"
- * that you asked for — simple and predictable in terms of load.
+ * Runs fn(item) for every item ONE AT A TIME (not in parallel), with
+ * a delayMs pause after each call. This is the "dumb fixed interval
+ * between requests" approach — simple and predictable load.
  */
 const runSequentialWithDelay = (items, delayMs, fn) =>
 	items.reduce(
@@ -194,8 +220,21 @@ const withTimeout = (promise, ms, timeoutError = { code: "ETIMEDOUT" }) =>
 	})
 
 // ====================================================================
-// CHECKING A SINGLE IP AGAINST A SINGLE DNSBL ZONE
+// CHECK A SINGLE IP AGAINST A SINGLE DNSBL ZONE
 // ====================================================================
+
+// Spamhaus (and some others) use the 127.255.255.x range as service
+// ERROR codes, not a real listing:
+//   127.255.255.252 — query error (malformed request)
+//   127.255.255.254 — query arrived via a public/open resolver
+//   127.255.255.255 — query rate limit exceeded
+// If we see one of these addresses, it does NOT mean "this IP is
+// blacklisted" — it means "we couldn't ask properly". Such results
+// must NOT flow into newListings/alerts, or every checked IP would
+// falsely look like a new incident.
+const isResolverErrorCode = (addresses) =>
+	Array.isArray(addresses) &&
+	addresses.some((addr) => addr.startsWith("127.255.255."))
 
 const checkDNSBL = async (ip, zone, opts = {}) => {
 	const timeoutMs = opts.dnsTimeoutMs || 4000
@@ -205,6 +244,21 @@ const checkDNSBL = async (ip, zone, opts = {}) => {
 	const attempt = async (attemptsLeft) => {
 		try {
 			const addresses = await withTimeout(dns.resolve4(query), timeoutMs)
+
+			if (isResolverErrorCode(addresses)) {
+				const reason = await dns
+					.resolveTxt(query)
+					.then((txt) => txt.flat().join(" "))
+					.catch(() => null)
+				return {
+					ip,
+					zone,
+					listed: null, // neither true nor false — an access error, not a result
+					error: `resolver_blocked: ${reason || addresses.join(",")}`,
+					checkedAt: new Date().toISOString(),
+				}
+			}
+
 			const reason = await dns
 				.resolveTxt(query)
 				.then((txt) => txt.flat().join(" "))
@@ -236,7 +290,7 @@ const checkDNSBL = async (ip, zone, opts = {}) => {
 }
 
 // ====================================================================
-// SCANNING ALL SUBNETS AGAINST ALL ZONES (sequentially, with a delay)
+// SCAN ALL SUBNETS AGAINST ALL ZONES (sequential, with delay)
 // ====================================================================
 
 const scanSubnets = async (options = {}) => {
@@ -253,8 +307,9 @@ const scanSubnets = async (options = {}) => {
 	const total = tasks.length
 	let done = 0
 
-	// options.onProgress(done, total) — optional callback to track
-	// progress during a long scan instead of silence for 10+ minutes.
+	// options.onProgress(done, total, result) — optional callback so
+	// you can see progress during a long scan instead of 10+ minutes
+	// of silence.
 	const results = await runSequentialWithDelay(
 		tasks,
 		requestDelayMs,
@@ -276,15 +331,15 @@ const scanSubnets = async (options = {}) => {
 }
 
 // ====================================================================
-// SPAMHAUS DROP/EDROP — list of "bad" NETWORKS (not individual IPs),
-// free, no key required, officially allowed for automatic
-// download (see https://www.spamhaus.org/drop/). Spamhaus rule:
-// do not download more than once per hour, preferably once per day — therefore we cache
-// to a file and download again only when the cache is outdated.
+// SPAMHAUS DROP/EDROP — a list of "bad" NETWORKS (not individual IPs),
+// free, no key required, officially allowed for automated download
+// (see https://www.spamhaus.org/drop/). Spamhaus policy: no more than
+// once per hour, once per day recommended — hence the local cache
+// file, re-downloaded only once it's stale.
 // ====================================================================
 
 /**
- * Parses the text format of drop.txt:
+ * Parses the drop.txt text format:
  *   "5.42.92.0/24 ; SBL625300"
  * Lines starting with ";" are comments and are skipped.
  */
@@ -307,9 +362,10 @@ const fetchDropListRaw = async (url) => {
 }
 
 /**
- * Returns the list of DROP entries, using a local cache file. If the cache
- * is younger than maxAgeHours — reads from the file, without going to the network. If
- * it is outdated (or the file does not exist yet) — downloads again and updates the cache.
+ * Returns the DROP entries, using a local cache file. If the cache is
+ * younger than maxAgeHours, reads from disk without touching the
+ * network. If it's stale (or doesn't exist yet), downloads fresh and
+ * updates the cache.
  */
 const loadDropList = async (options = {}) => {
 	const cfg = getConfig()
@@ -324,7 +380,7 @@ const loadDropList = async (options = {}) => {
 			return parseDropText(fs.readFileSync(cacheFile, "utf8"))
 		}
 	} catch (_) {
-		// cache does not exist yet — download for the first time
+		// no cache yet — download for the first time
 	}
 
 	const text = await fetchDropListRaw(url)
@@ -332,6 +388,7 @@ const loadDropList = async (options = {}) => {
 	return parseDropText(text)
 }
 
+/** Checks a single IP against the DROP network list (no network I/O, pure logic). */
 const checkAgainstDropEntries = (ip, dropEntries) => {
 	const match = dropEntries.find((entry) => ipInCidr(ip, entry.cidr))
 	return match
@@ -340,10 +397,9 @@ const checkAgainstDropEntries = (ip, dropEntries) => {
 }
 
 /**
- * Checks a list of IPs against the Spamhaus DROP and returns
- * the result in THE SAME format as checkDNSBL() — with the field
- * zone:"spamhaus.DROP" — so that diffAgainstState() handles them
- * the same way, without separate logic.
+ * Checks a list of IPs against Spamhaus DROP and shapes the result
+ * the SAME way checkDNSBL() does — with zone:"spamhaus.DROP" — so
+ * diffAgainstState() handles both uniformly, no separate logic needed.
  */
 const scanDropList = async (ips, options = {}) => {
 	const dropEntries = await loadDropList(options)
@@ -355,7 +411,7 @@ const scanDropList = async (ips, options = {}) => {
 			zone: "spamhaus.DROP",
 			listed: r.listed,
 			reason: r.listed
-				? `netblock ${r.cidr} (${r.sblId || "без SBL ID"})`
+				? `netblock ${r.cidr} (${r.sblId || "no SBL ID"})`
 				: null,
 			checkedAt,
 		}
@@ -364,21 +420,21 @@ const scanDropList = async (ips, options = {}) => {
 }
 
 // ====================================================================
-// STATE (file) AND DIFF — here we determine what is "new" and what is not
+// STATE (file) AND DIFF — this decides what's "new" and what isn't
 // ====================================================================
 
 const loadState = (stateFile) => {
 	try {
 		const raw = fs.readFileSync(stateFile, "utf8")
-		if (!raw.trim()) return {} // файл существует, но пустой — как первый запуск
+		if (!raw.trim()) return {} // file exists but is empty — treat as first run
 		return JSON.parse(raw)
 	} catch (err) {
-		if (err.code === "ENOENT") return {} // файла ещё нет — первый запуск
+		if (err.code === "ENOENT") return {} // no file yet — first run
 		if (err instanceof SyntaxError) {
-			// файл повреждён/не валидный JSON (например, остался пустым после
-			// прерванного запуска) — не роняем цикл, просто начинаем заново
+			// file is corrupted/invalid JSON (e.g. left empty after an
+			// interrupted run) — don't crash the cycle, just start fresh
 			console.warn(
-				`Файл состояния "${stateFile}" повреждён или пуст, начинаю с чистого состояния.`,
+				`State file "${stateFile}" is corrupted or empty, starting from a clean state.`,
 			)
 			return {}
 		}
@@ -393,19 +449,19 @@ const saveState = (stateFile, state) => {
 }
 
 /**
- * Compares the current scan results with the previous state.
- * Implemented using reduce (no loops/mutation), returns:
- *  - newListings      — became listed:true, were not before. ALERT.
- *  - resolvedListings — were listed:true, now clean.
- *  - stillListed      — were and remain listed:true (no repeated alert).
+ * Compares the current scan results against the previous state.
+ * Implemented via reduce (no loops/mutation), returns:
+ *  - newListings      — became listed:true, weren't before. ALERT.
+ *  - resolvedListings — were listed:true, are now clean.
+ *  - stillListed      — were and still are listed:true (no repeat alert).
  *  - nextState        — for saveState().
  *
- * IMPORTANT: if this is the very first run (no state file exists),
- * ALL current hits will appear in newListings — this is expected, not
- * a bug: the module did not know about them "before".
- * Checks with listed:null (DNS failure/timeout) do not participate in the diff —
- * the history for such a key is simply carried over as is, so that
- * a temporary resolver failure does not look like "resolved".
+ * IMPORTANT: on the very first run (no state file existed yet), ALL
+ * current listings will land in newListings — that's expected, not a
+ * bug: the module simply didn't "know" about them before.
+ * Checks with listed:null (DNS failure/timeout) don't participate in
+ * the diff — their history key is carried over as-is, so a temporary
+ * resolver failure never looks like "got delisted".
  */
 const diffAgainstState = (prevState, scanResults) => {
 	const initial = {
@@ -471,8 +527,8 @@ const diffAgainstState = (prevState, scanResults) => {
 		}
 	}, initial)
 
-	// ключи из прошлого состояния, которые в этот раз не проверялись
-	// (сменили список подсетей/зон или был сбой DNS) — переносим как есть
+	// keys from the previous state that weren't checked this time
+	// (subnets/zones changed, or a DNS failure happened) — carried over as-is
 	const nextState = Object.keys(prevState).reduce(
 		(ns, key) =>
 			acc.seenKeys.has(key) ? ns : { ...ns, [key]: prevState[key] },
@@ -488,31 +544,31 @@ const diffAgainstState = (prevState, scanResults) => {
 }
 
 // ====================================================================
-// TELEGRAM TRIGGER (HTTP POST to Bot API, token already in env)
+// TELEGRAM TRIGGER (HTTP POST to the Bot API, token already in env)
 // ====================================================================
 
-const escapeForTelegram = (text) => text // используем обычный текст без разметки, спецсимволы не нужно экранировать
+const escapeForTelegram = (text) => text // plain text, no markup, no escaping needed
 
 const formatNewListingsMessage = (newListings) => {
 	if (!newListings.length) return null
 	const lines = newListings.map(
 		(r) => `⚠️ ${r.ip} → ${r.zone}${r.reason ? ` (${r.reason})` : ""}`,
 	)
-	return `🚨 Новые попадания в блэклисты (${newListings.length}):\n${lines.join("\n")}`
+	return `🚨 New blacklist hits (${newListings.length}):\n${lines.join("\n")}`
 }
 
 const formatResolvedMessage = (resolvedListings) => {
 	if (!resolvedListings.length) return null
 	const lines = resolvedListings.map(
-		(r) => `✅ ${r.ip} → ${r.zone} (был в списке с ${r.wasListedSince})`,
+		(r) => `✅ ${r.ip} → ${r.zone} (listed since ${r.wasListedSince})`,
 	)
-	return `Разлистились (${resolvedListings.length}):\n${lines.join("\n")}`
+	return `Delisted (${resolvedListings.length}):\n${lines.join("\n")}`
 }
 
 /**
- * Splits a long text into chunks no longer than maxLen characters, trying
- * to split on line boundaries (Telegram has a limit of 4096 characters per
- * message, we take 3500 to be safe).
+ * Splits a long text into chunks no longer than maxLen characters,
+ * trying to break on line boundaries (Telegram's limit is 4096 chars
+ * per message; we use 3500 to leave headroom).
  */
 const splitIntoChunks = (text, maxLen = 3500) =>
 	text.split("\n").reduce((chunks, line) => {
@@ -524,10 +580,10 @@ const splitIntoChunks = (text, maxLen = 3500) =>
 	}, [])
 
 /**
- * Sends ONE message to Telegram via Bot API HTTP POST.
- * The token and chat_id are taken from env (getConfig), or can be passed
- * explicitly as the second argument — convenient for tests.
- * Requires Node.js >= 18 (global fetch).
+ * Sends ONE message to Telegram via the Bot API HTTP POST. Token and
+ * chat_id come from env (getConfig) unless passed explicitly as the
+ * second argument — handy for tests. Requires Node.js >= 18 (global
+ * fetch).
  */
 const sendTelegramMessage = async (text, { token, chatId } = {}) => {
 	const cfg = getConfig()
@@ -561,14 +617,15 @@ const sendTelegramMessage = async (text, { token, chatId } = {}) => {
 }
 
 /**
- * MAIN TRIGGER. Accepts the result of diffAgainstState (or an object
- * with newListings/resolvedListings) and, if there is something to report,
- * sends a SEPARATE MESSAGE TO TELEGRAM FOR EACH IP (not a single combined
- * message), with a 2-second pause between each message — to avoid hitting
- * the Telegram Bot API rate limit and to ensure each hit is visible as a
- * separate notification, rather than getting lost in the general block.
+ * MAIN TRIGGER. Takes the result of diffAgainstState (or any object
+ * with newListings/resolvedListings fields) and, if there's anything
+ * to report, sends ONE SEPARATE TELEGRAM MESSAGE PER IP (not one
+ * combined message), with a 2-second delay between each message — to
+ * stay under the Telegram Bot API rate limit and to make sure each
+ * hit is visible as its own notification rather than getting lost in
+ * a wall of text.
  *
- * Пример:
+ * Example:
  *   const diff = diffAgainstState(prevState, scanResult.results);
  *   await triggerAlerts(diff);
  */
@@ -576,7 +633,7 @@ const formatSingleNewListingLine = (r) =>
 	`⚠️ ${r.ip} → ${r.zone}${r.reason ? ` (${r.reason})` : ""}`
 
 const formatSingleResolvedLine = (r) =>
-	`✅ ${r.ip} → ${r.zone} (был в списке с ${r.wasListedSince})`
+	`✅ ${r.ip} → ${r.zone} (listed since ${r.wasListedSince})`
 
 const triggerAlerts = async (
 	{ newListings = [], resolvedListings = [] },
@@ -591,7 +648,7 @@ const triggerAlerts = async (
 		return { sent: false, reason: "nothing_to_report" }
 	}
 
-	// Пауза 2000мс между КАЖДЫМ отдельным сообщением (по одному IP за раз).
+	// 2000ms pause between EACH individual message (one IP at a time).
 	const sendResults = await runSequentialWithDelay(
 		items,
 		2000,
@@ -601,10 +658,31 @@ const triggerAlerts = async (
 	return { sent: true, count: items.length, sendResults }
 }
 
+/**
+ * If the scan hit resolver-blocked errors (see isResolverErrorCode
+ * above), send ONE aggregated warning message instead of spamming the
+ * chat with one message per affected IP — this is a resolver/infra
+ * problem, not N separate blacklist incidents.
+ */
+const formatResolverBlockedWarning = (failedChecks) => {
+	const blocked = failedChecks.filter(
+		(r) => typeof r.error === "string" && r.error.startsWith("resolver_blocked"),
+	)
+	if (blocked.length === 0) return null
+
+	const zones = [...new Set(blocked.map((r) => r.zone))]
+	return (
+		`⚠️ DNS resolver problem: ${blocked.length} check(s) across ${zones.join(", ")} ` +
+		`were rejected as "public/open resolver" — these are NOT real blacklist hits, ` +
+		`just blocked queries. Fix the resolver used by this server (see IPMON_DNS_SERVERS) ` +
+		`to get real results.`
+	)
+}
+
 // ====================================================================
-// AbuseIPDB — FULLY OPTIONAL, DOES NOT WORK WITHOUT A KEY.
-// No paid token is required for the module to work in general —
-// this is an additional feature "if needed".
+// AbuseIPDB — FULLY OPTIONAL, DOES NOTHING WITHOUT A KEY.
+// No paid token is required for the module as a whole — this is an
+// extra capability "in case you ever need it".
 // ====================================================================
 
 const checkAbuseIPDB = async (ip, apiKey, { threshold = 25 } = {}) => {
@@ -654,12 +732,12 @@ const scanAbuseIPDB = async (ips, options = {}) => {
 }
 
 // ====================================================================
-// MAIN FUNCTION FOR INTEGRATION INTO THE MONITORING SYSTEM
+// MAIN ENTRY POINT FOR YOUR SCHEDULER
 // ====================================================================
 
 /**
- * Один полный цикл: скан -> дифф -> сохранение состояния -> телеграм.
- * Вызывайте её по расписанию (раз в 1-2 часа) из вашей системы.
+ * One full cycle: scan -> diff -> save state -> telegram.
+ * Call this on a schedule (every 1-2 hours) from your own scheduler.
  */
 const runMonitoringCycle = async (overrides = {}) => {
 	const cfg = getConfig()
@@ -668,10 +746,10 @@ const runMonitoringCycle = async (overrides = {}) => {
 
 	const scan = await scanSubnets(overrides)
 
-	// Spamhaus DROP — the same IPs as in scanSubnets, but the check
-	// is done differently (CIDR inclusion, not a DNS query). If downloading
-	// the list fails (network/site unavailable) — we do not break the whole cycle,
-	// just mark dropError and continue without these results.
+	// Spamhaus DROP — the same IPs as scanSubnets, but checked
+	// differently (CIDR membership, not a DNS query). If the download
+	// fails (network/site unavailable), don't crash the whole cycle —
+	// just record dropError and continue without those results.
 	let dropResults = []
 	let dropError = null
 	if (cfg.dropEnabled) {
@@ -693,13 +771,21 @@ const runMonitoringCycle = async (overrides = {}) => {
 
 	saveState(stateFile, diff.nextState)
 
+	const failedChecks = allResults.filter((r) => r.listed === null)
+
 	let telegramResult = null
+	let resolverWarningResult = null
 	if (cfg.telegramAutoSend) {
 		telegramResult = await triggerAlerts(diff)
+
+		const resolverWarning = formatResolverBlockedWarning(failedChecks)
+		if (resolverWarning) {
+			resolverWarningResult = await sendTelegramMessage(resolverWarning)
+		}
 	}
 
-	// AbuseIPDB — executed ONLY if an API key is explicitly set in env.
-	// If there is no key (your default case) — just skipped:true.
+	// AbuseIPDB — runs ONLY if a key is explicitly set in env.
+	// Without a key (your default case) it's simply skipped:true.
 	const abuseIpDb = cfg.abuseIpDbKey
 		? await scanAbuseIPDB([...new Set(diff.newListings.map((r) => r.ip))])
 		: { skipped: true, reason: "no_api_key" }
@@ -712,15 +798,16 @@ const runMonitoringCycle = async (overrides = {}) => {
 		newListings: diff.newListings,
 		resolvedListings: diff.resolvedListings,
 		stillListed: diff.stillListed,
-		failedChecks: allResults.filter((r) => r.listed === null),
+		failedChecks,
 		dropError,
 		telegramResult,
+		resolverWarningResult,
 		abuseIpDb,
 	}
 }
 
 // ====================================================================
-// EXPORT (only functions and constants, no class)
+// EXPORTS (functions and constants only, no class)
 // ====================================================================
 
 module.exports = {
@@ -738,6 +825,7 @@ module.exports = {
 	diffAgainstState,
 	formatNewListingsMessage,
 	formatResolvedMessage,
+	formatResolverBlockedWarning,
 	splitIntoChunks,
 	sendTelegramMessage,
 	triggerAlerts,
@@ -749,19 +837,26 @@ module.exports = {
 
 /**
  * ====================================================================
- * EXAMPLE USAGE (comment, does not execute)
+ * USAGE EXAMPLE (comment only, not executed)
  * ====================================================================
  *
  * const { runMonitoringCycle } = require('./ip-blacklist-monitor');
  *
  * async function tick() {
  *   const summary = await runMonitoringCycle();
- *   console.log(`Checked ${summary.totalChecks} IP/zones`);
- *   console.log(`New listings: ${summary.newListings.length}`);
+ *   console.log(`Checked ${summary.totalChecks} IP/zone combinations`);
+ *   console.log(`New hits: ${summary.newListings.length}`);
  *   if (summary.failedChecks.length > 20) {
- *      console.warn('So many failed checks:', summary.failedChecks.length);
+ *     // many failures in a row — resolver might be blocked/unreachable
+ *     console.warn('Many failed checks:', summary.failedChecks.length);
  *   }
  * }
  *
+ * // once an hour:
+ * // const cron = require('node-cron');
+ * // cron.schedule('0 * * * *', tick);
+ *
+ * // once every 2 hours:
+ * // cron.schedule('0 *\/2 * * *', tick);
  * ====================================================================
  */
