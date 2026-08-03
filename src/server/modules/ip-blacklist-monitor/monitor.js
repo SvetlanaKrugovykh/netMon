@@ -103,6 +103,14 @@ const getConfig = () => ({
 		process.env.IPMON_STATE_FILE ||
 		path.join(__dirname, "../../data/dnsbl-state.json"),
 
+	// Second JSON: one overall status per IP ("problem" / "clean") across
+	// ALL zones combined — separate from the per-zone history above.
+	// Lets you check "is this IP fine right now" in one lookup, and is
+	// what drives the "recovered" notification below.
+	summaryFile:
+		process.env.IPMON_SUMMARY_FILE ||
+		path.join(__dirname, "../../data/ip-status-summary.json"),
+
 	// --- Telegram ---
 	telegramBotToken: process.env.IPMON_TELEGRAM_BOT_TOKEN || "",
 	telegramChatId: process.env.IPMON_TELEGRAM_CHAT_ID || "",
@@ -448,6 +456,102 @@ const saveState = (stateFile, state) => {
 	fs.renameSync(tmp, stateFile)
 }
 
+// ====================================================================
+// PER-IP SUMMARY STATE ("is this IP a problem right now, yes/no")
+// ====================================================================
+// A single overall status per IP across ALL zones combined, kept in a
+// SEPARATE json file from the per-zone history above. This answers
+// "is 176.124.138.18 fine right now" in one lookup, and is what lets
+// us send ONE "recovered" notification when an IP that used to be
+// flagged becomes clean everywhere — even if individual zones flicker
+// true/false/error across different cycles.
+
+const loadSummaryState = (summaryFile) => {
+	try {
+		const raw = fs.readFileSync(summaryFile, "utf8")
+		if (!raw.trim()) return {}
+		return JSON.parse(raw)
+	} catch (err) {
+		if (err.code === "ENOENT") return {}
+		if (err instanceof SyntaxError) {
+			console.warn(
+				`Summary file "${summaryFile}" is corrupted or empty, starting from a clean state.`,
+			)
+			return {}
+		}
+		throw err
+	}
+}
+
+const saveSummaryState = (summaryFile, summary) => {
+	const tmp = `${summaryFile}.tmp`
+	fs.writeFileSync(tmp, JSON.stringify(summary, null, 2))
+	fs.renameSync(tmp, summaryFile)
+}
+
+/**
+ * Groups all check results by IP and produces one summary entry per
+ * IP: "problem" (listed on at least one zone this cycle) or "clean"
+ * (checked and clean on every zone this cycle). If an IP had NO valid
+ * (non-null) checks at all this cycle — e.g. every zone errored out —
+ * its previous summary entry is carried over unchanged: a temporary
+ * resolver error must never look like "got healed".
+ *
+ * Returns { nextSummary, healedIps }, where healedIps is the list of
+ * IPs that were "problem" before this cycle and are "clean" now —
+ * this is exactly what should trigger a recovery notification.
+ */
+const updateIpSummary = (prevSummary, allResults) => {
+	const byIp = allResults.reduce((acc, r) => {
+		if (r.listed === null) return acc // errors don't count either way
+		const bucket = acc[r.ip] || []
+		return { ...acc, [r.ip]: [...bucket, r] }
+	}, {})
+
+	const checkedAt = new Date().toISOString()
+
+	const { nextSummary, healedIps } = Object.entries(byIp).reduce(
+		(acc, [ip, results]) => {
+			const listedOn = results.filter((r) => r.listed).map((r) => r.zone)
+			const prevEntry = prevSummary[ip]
+			const wasProblem = prevEntry && prevEntry.status === "problem"
+
+			const entry =
+				listedOn.length > 0
+					? { status: "problem", zones: listedOn, lastCheckedAt: checkedAt }
+					: { status: "clean", lastCheckedAt: checkedAt }
+
+			const healed = wasProblem && entry.status === "clean"
+
+			return {
+				nextSummary: { ...acc.nextSummary, [ip]: entry },
+				healedIps: healed
+					? [...acc.healedIps, { ip, previousZones: prevEntry.zones || [] }]
+					: acc.healedIps,
+			}
+		},
+		{ nextSummary: {}, healedIps: [] },
+	)
+
+	// IPs not checked at all this cycle keep their previous entry as-is
+	const finalSummary = Object.keys(prevSummary).reduce(
+		(acc, ip) => (acc[ip] ? acc : { ...acc, [ip]: prevSummary[ip] }),
+		nextSummary,
+	)
+
+	return { nextSummary: finalSummary, healedIps }
+}
+
+/**
+ * One "recovered" message per healed IP, in English, naming the
+ * zone(s) it used to be listed on — so the source of the original
+ * problem stays visible even in the recovery notice. Existing
+ * per-zone problem alerts (formatSingleNewListingLine etc.) are
+ * untouched — this is an ADDITIONAL message type, not a replacement.
+ */
+const formatHealedLine = ({ ip, previousZones }) =>
+	`✅ ${ip} has recovered — no longer listed on: ${previousZones.join(", ") || "unknown source"}`
+
 /**
  * Compares the current scan results against the previous state.
  * Implemented via reduce (no loops/mutation), returns:
@@ -771,16 +875,36 @@ const runMonitoringCycle = async (overrides = {}) => {
 
 	saveState(stateFile, diff.nextState)
 
+	// Second, separate json: one overall status per IP + "recovered"
+	// notification when an IP that was previously flagged becomes
+	// clean everywhere. Independent from the per-zone diff above.
+	const summaryFile = overrides.summaryFile || cfg.summaryFile
+	const prevSummary = loadSummaryState(summaryFile)
+	const { nextSummary, healedIps } = updateIpSummary(prevSummary, allResults)
+	saveSummaryState(summaryFile, nextSummary)
+
 	const failedChecks = allResults.filter((r) => r.listed === null)
 
 	let telegramResult = null
 	let resolverWarningResult = null
+	let healedResult = null
 	if (cfg.telegramAutoSend) {
 		telegramResult = await triggerAlerts(diff)
 
 		const resolverWarning = formatResolverBlockedWarning(failedChecks)
 		if (resolverWarning) {
 			resolverWarningResult = await sendTelegramMessage(resolverWarning)
+		}
+
+		if (healedIps.length > 0) {
+			const lines = healedIps.map(formatHealedLine)
+			healedResult = {
+				sent: true,
+				count: lines.length,
+				sendResults: await runSequentialWithDelay(lines, 2000, (text) =>
+					sendTelegramMessage(text),
+				),
+			}
 		}
 	}
 
@@ -802,6 +926,8 @@ const runMonitoringCycle = async (overrides = {}) => {
 		dropError,
 		telegramResult,
 		resolverWarningResult,
+		healedIps,
+		healedResult,
 		abuseIpDb,
 	}
 }
@@ -822,6 +948,10 @@ module.exports = {
 	scanDropList,
 	loadState,
 	saveState,
+	loadSummaryState,
+	saveSummaryState,
+	updateIpSummary,
+	formatHealedLine,
 	diffAgainstState,
 	formatNewListingsMessage,
 	formatResolvedMessage,
