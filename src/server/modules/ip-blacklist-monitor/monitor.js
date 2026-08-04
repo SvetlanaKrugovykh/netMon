@@ -63,6 +63,7 @@ const DEFAULT_DNSBL_ZONES = [
 	"b.barracudacentral.org",
 	"dnsbl-1.uceprotect.net",
 	"tor.dan.me.uk",
+	"dyna.spamrats.com",
 ]
 
 const splitEnvList = (value, fallback) =>
