@@ -94,6 +94,19 @@ const getConfig = () => ({
 	retries: parseInt(process.env.IPMON_RETRIES || "1", 10),
 	excludeReserved: (process.env.IPMON_EXCLUDE_RESERVED || "true") === "true",
 
+	// If a single DNSBL zone comes back "listed" for more than this
+	// share of checked IPs in one cycle (and at least minChecks IPs
+	// were actually checked against it), treat it as broken/misconfigured
+	// rather than a real incident — see detectSuspiciousZones(). This is
+	// what protects against a bad new source flagging "all" addresses.
+	zoneSuspiciousThreshold: parseFloat(
+		process.env.IPMON_ZONE_SUSPICIOUS_THRESHOLD || "0.15",
+	),
+	zoneSuspiciousMinChecks: parseInt(
+		process.env.IPMON_ZONE_SUSPICIOUS_MIN_CHECKS || "10",
+		10,
+	),
+
 	// Default assumes the module lives at
 	// src/server/modules/ip-blacklist-monitor/monitor.js — then
 	// ../../data/ points at src/server/data/. If your module lives
@@ -244,6 +257,21 @@ const isResolverErrorCode = (addresses) =>
 	Array.isArray(addresses) &&
 	addresses.some((addr) => addr.startsWith("127.255.255."))
 
+// Every legitimate DNSBL zone answers a "listed" query with an address
+// in 127.0.0.0/8 (the loopback range is the de-facto DNSBL convention,
+// used by Spamhaus, Barracuda, SpamCop, SORBS, UCEPROTECT, dan.me.uk —
+// all of the zones in DEFAULT_DNSBL_ZONES). A response OUTSIDE that
+// range is not a real "yes, blacklisted" answer — it's a sign of a
+// hijacked/misbehaving resolver (some ISP/VPS resolvers "helpfully"
+// answer NXDOMAIN queries with a real IP instead of erroring), a
+// misconfigured zone, or a wildcard record on a broken third-party
+// source. We treat that case as an inconclusive error, NOT as a
+// listing — this is a narrow, additive check: it only ever turns a
+// would-be listed:true into listed:null, never the other way around,
+// so it cannot hide a real listing that already looks correct today.
+const isOutsideDnsblRange = (addresses) =>
+	Array.isArray(addresses) && !addresses.every((addr) => addr.startsWith("127."))
+
 const checkDNSBL = async (ip, zone, opts = {}) => {
 	const timeoutMs = opts.dnsTimeoutMs || 4000
 	const retries = opts.retries ?? 1
@@ -263,6 +291,16 @@ const checkDNSBL = async (ip, zone, opts = {}) => {
 					zone,
 					listed: null, // neither true nor false — an access error, not a result
 					error: `resolver_blocked: ${reason || addresses.join(",")}`,
+					checkedAt: new Date().toISOString(),
+				}
+			}
+
+			if (isOutsideDnsblRange(addresses)) {
+				return {
+					ip,
+					zone,
+					listed: null, // not a valid DNSBL answer — do NOT treat as a real hit
+					error: `unexpected_response_range: ${addresses.join(",")}`,
 					checkedAt: new Date().toISOString(),
 				}
 			}
@@ -783,6 +821,101 @@ const formatResolverBlockedWarning = (failedChecks) => {
 	)
 }
 
+/**
+ * Sibling of formatResolverBlockedWarning: aggregates the NEW
+ * "unexpected_response_range" errors (see isOutsideDnsblRange above)
+ * into ONE warning message instead of silently dropping them or, worse,
+ * alerting on them as real listings.
+ */
+const formatUnexpectedRangeWarning = (failedChecks) => {
+	const unexpected = failedChecks.filter(
+		(r) =>
+			typeof r.error === "string" &&
+			r.error.startsWith("unexpected_response_range"),
+	)
+	if (unexpected.length === 0) return null
+
+	const zones = [...new Set(unexpected.map((r) => r.zone))]
+	return (
+		`⚠️ DNS returned an address outside the normal 127.0.0.0/8 DNSBL range for ` +
+		`${unexpected.length} check(s) across ${zones.join(", ")} — treated as an ` +
+		`inconclusive error, NOT a real listing (likely a hijacked resolver or a ` +
+		`broken/misconfigured zone).`
+	)
+}
+
+/**
+ * Guard against a zone that suddenly comes back "listed" for a much
+ * larger share of checked IPs than any real-world DNSBL incident would
+ * produce — the signature of a broken/misconfigured source (wildcard
+ * DNS, wrong hostname, unauthorized-query behavior, etc.) rather than
+ * an actual wave of new blacklistings. Pure function: given this
+ * cycle's raw results, returns the zones that look suspicious plus
+ * their stats — it does NOT mutate or filter anything itself.
+ *
+ * minChecks guards against noise on tiny scans (a single /28 subnet
+ * hitting 2/3 listed is not the same signal as 300/500).
+ */
+const detectSuspiciousZones = (
+	results,
+	{ threshold = 0.15, minChecks = 10 } = {},
+) => {
+	const byZone = results.reduce((acc, r) => {
+		if (r.listed === null) return acc
+		const bucket = acc[r.zone] || { total: 0, listed: 0 }
+		return {
+			...acc,
+			[r.zone]: {
+				total: bucket.total + 1,
+				listed: bucket.listed + (r.listed ? 1 : 0),
+			},
+		}
+	}, {})
+
+	return Object.entries(byZone)
+		.map(([zone, stats]) => ({ zone, ...stats, ratio: stats.listed / stats.total }))
+		.filter((s) => s.total >= minChecks && s.ratio > threshold)
+}
+
+/**
+ * Given the zones flagged by detectSuspiciousZones, returns a NEW
+ * results array where entries from those zones have listed forced to
+ * null (with an explanatory error) — same shape everything else in
+ * this file already knows how to skip (diffAgainstState,
+ * updateIpSummary both ignore listed:null). This means a suspicious
+ * zone's hits never reach newListings, never get alerted per-IP, and
+ * never get written into state as real listings — without touching
+ * any of that existing, already-working logic.
+ */
+const quarantineSuspiciousZones = (results, suspiciousZones) => {
+	const suspiciousZoneNames = new Set(suspiciousZones.map((s) => s.zone))
+	if (suspiciousZoneNames.size === 0) return results
+
+	return results.map((r) =>
+		suspiciousZoneNames.has(r.zone) && r.listed !== null
+			? {
+					...r,
+					listed: null,
+					error: `zone_suspicious: ${r.zone} listed an unusually high share of checked IPs this cycle`,
+				}
+			: r,
+	)
+}
+
+const formatSuspiciousZoneWarning = (suspiciousZones) => {
+	if (suspiciousZones.length === 0) return null
+	const lines = suspiciousZones.map(
+		(s) =>
+			`${s.zone}: ${s.listed}/${s.total} (${Math.round(s.ratio * 100)}%)`,
+	)
+	return (
+		`🚨 Suspicious DNSBL source this cycle — listed an unusually high share of ` +
+		`checked IPs, quarantined and NOT alerted as real hits:\n${lines.join("\n")}\n` +
+		`This usually means the zone/hostname is wrong or broken, not a real incident. ` +
+		`Verify manually before trusting it again.`
+	)
+}
+
 // ====================================================================
 // AbuseIPDB — FULLY OPTIONAL, DOES NOTHING WITHOUT A KEY.
 // No paid token is required for the module as a whole — this is an
@@ -850,6 +983,18 @@ const runMonitoringCycle = async (overrides = {}) => {
 
 	const scan = await scanSubnets(overrides)
 
+	// Guard against a broken/misconfigured DNSBL source before it ever
+	// reaches the diff/alert logic below — see detectSuspiciousZones().
+	const suspiciousZoneThreshold =
+		overrides.zoneSuspiciousThreshold ?? cfg.zoneSuspiciousThreshold
+	const suspiciousZoneMinChecks =
+		overrides.zoneSuspiciousMinChecks ?? cfg.zoneSuspiciousMinChecks
+	const suspiciousZones = detectSuspiciousZones(scan.results, {
+		threshold: suspiciousZoneThreshold,
+		minChecks: suspiciousZoneMinChecks,
+	})
+	const safeDnsblResults = quarantineSuspiciousZones(scan.results, suspiciousZones)
+
 	// Spamhaus DROP — the same IPs as scanSubnets, but checked
 	// differently (CIDR membership, not a DNS query). If the download
 	// fails (network/site unavailable), don't crash the whole cycle —
@@ -868,7 +1013,7 @@ const runMonitoringCycle = async (overrides = {}) => {
 		}
 	}
 
-	const allResults = [...scan.results, ...dropResults]
+	const allResults = [...safeDnsblResults, ...dropResults]
 
 	const prevState = loadState(stateFile)
 	const diff = diffAgainstState(prevState, allResults)
@@ -887,6 +1032,7 @@ const runMonitoringCycle = async (overrides = {}) => {
 
 	let telegramResult = null
 	let resolverWarningResult = null
+	let suspiciousZoneWarningResult = null
 	let healedResult = null
 	if (cfg.telegramAutoSend) {
 		telegramResult = await triggerAlerts(diff)
@@ -894,6 +1040,16 @@ const runMonitoringCycle = async (overrides = {}) => {
 		const resolverWarning = formatResolverBlockedWarning(failedChecks)
 		if (resolverWarning) {
 			resolverWarningResult = await sendTelegramMessage(resolverWarning)
+		}
+
+		const unexpectedRangeWarning = formatUnexpectedRangeWarning(failedChecks)
+		if (unexpectedRangeWarning) {
+			await sendTelegramMessage(unexpectedRangeWarning)
+		}
+
+		const suspiciousZoneWarning = formatSuspiciousZoneWarning(suspiciousZones)
+		if (suspiciousZoneWarning) {
+			suspiciousZoneWarningResult = await sendTelegramMessage(suspiciousZoneWarning)
 		}
 
 		if (healedIps.length > 0) {
@@ -926,6 +1082,8 @@ const runMonitoringCycle = async (overrides = {}) => {
 		dropError,
 		telegramResult,
 		resolverWarningResult,
+		suspiciousZones,
+		suspiciousZoneWarningResult,
 		healedIps,
 		healedResult,
 		abuseIpDb,
@@ -956,6 +1114,10 @@ module.exports = {
 	formatNewListingsMessage,
 	formatResolvedMessage,
 	formatResolverBlockedWarning,
+	formatUnexpectedRangeWarning,
+	detectSuspiciousZones,
+	quarantineSuspiciousZones,
+	formatSuspiciousZoneWarning,
 	splitIntoChunks,
 	sendTelegramMessage,
 	triggerAlerts,
