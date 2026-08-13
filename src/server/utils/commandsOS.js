@@ -200,7 +200,7 @@ async function runCommand(command, args = [], value = '') {
           } else if (stderr) {
             logWithTime(`[ERROR] ${command}: ${stderr.split('\n')[0]}`)
           }
-          if (remoteCommand.includes('1.3.6.1.2.1.31.1.1.1.6') || remoteCommand.includes('1.3.6.1.2.1.31.1.1.1.10')) {
+          if (remoteCommandLine.includes('1.3.6.1.2.1.31.1.1.1.6') || remoteCommandLine.includes('1.3.6.1.2.1.31.1.1.1.10')) {
             const result = stdout.split(' ').pop().trim()
             if (SNMP_DEBUG_LEVEL > 1) {
               debugLog += `[RETURN] ${result}\n`
